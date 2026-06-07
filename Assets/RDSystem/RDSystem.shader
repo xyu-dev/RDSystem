@@ -13,6 +13,12 @@ Shader "RDSystem/RDSystem"
         _Dv("Diffusion (v)", Range(0, 1)) = 0.4
         _Feed("Feed", Range(0, 0.1)) = 0.05
         _Kill("Kill", Range(0, 0.1)) = 0.05
+
+        [Header(Interaction)]
+        [Space]
+        _ClickState("Click State", Float) = 0
+        _ClickPos("Click Position (UV)", Vector) = (0, 0, 0, 0)
+        _ClickRadius("Click Radius", Float) = 0.01
     }
 
     HLSLINCLUDE
@@ -27,6 +33,11 @@ Shader "RDSystem/RDSystem"
     // Update parameters
     half _Du, _Dv;
     half _Feed, _Kill;
+
+    // Interaction parameters
+    float _ClickState;
+    float2 _ClickPos;
+    float _ClickRadius;
 
     // Pass 0: Init
     half4 fragInit(InitCustomRenderTextureVaryings i) : SV_Target
@@ -57,6 +68,17 @@ Shader "RDSystem/RDSystem"
         dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.zy).xy * 0.05;
         dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.wy).xy * 0.20;
         dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.xy).xy * 0.05;
+
+        // Apply click interaction (add seed 'v')
+        float aspect = _CustomRenderTextureWidth * th;
+        float2 uvAspect = uv;
+        uvAspect.x *= aspect;
+        float2 clickPosAspect = _ClickPos;
+        clickPosAspect.x *= aspect;
+        
+        float dist = distance(uvAspect, clickPosAspect);
+        float clickEffect = step(dist, _ClickRadius) * _ClickState;
+        q.y = saturate(q.y + clickEffect);
 
         half ABB = q.x * q.y * q.y;
 
