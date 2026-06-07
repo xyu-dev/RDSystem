@@ -20,7 +20,7 @@ Shader "RDSystem/RDSystem"
     #include "CustomRenderTexture.hlsl"
     #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Random.hlsl"
 
-    // Initialization parameters
+    //.0
     float _Pop;
     uint _Seed;
     
