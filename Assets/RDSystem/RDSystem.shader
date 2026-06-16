@@ -17,8 +17,8 @@ Shader "RDSystem/RDSystem"
         [Header(Interaction)]
         [Space]
         _ClickState("Click State", Float) = 0
-        _ClickPos("Click Position (UV)", Vector) = (0, 0, 0, 0)
-        _ClickRadius("Click Radius", Float) = 0.01
+        _ClickPos("Click Position (Sphere UV)", Vector) = (0, 0, 0, 0)
+        _ClickRadius("Click Radius (Radians)", Float) = 0.08
     }
 
     HLSLINCLUDE
@@ -26,18 +26,30 @@ Shader "RDSystem/RDSystem"
     #include "CustomRenderTexture.hlsl"
     #include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Random.hlsl"
 
-    //.0
     float _Pop;
     uint _Seed;
     
-    // Update parameters
     half _Du, _Dv;
     half _Feed, _Kill;
 
-    // Interaction parameters
     float _ClickState;
     float2 _ClickPos;
     float _ClickRadius;
+
+    #define RD_PI 3.14159265359
+    
+    float3 SphereUVToDir(float2 uv)
+    {
+        float phi = uv.x * 2.0 * RD_PI;
+        float theta = uv.y * RD_PI;
+
+        float3 dir;
+        dir.x = sin(theta) * cos(phi);
+        dir.y = cos(theta);
+        dir.z = sin(theta) * sin(phi);
+
+        return normalize(dir);
+    }
 
     // Pass 0: Init
     half4 fragInit(InitCustomRenderTextureVaryings i) : SV_Target
@@ -51,8 +63,8 @@ Shader "RDSystem/RDSystem"
     // Pass 1: Update
     half4 fragUpdate(CustomRenderTextureVaryings i) : SV_Target
     {
-        float tw = 1 / _CustomRenderTextureWidth;
-        float th = 1 / _CustomRenderTextureHeight;
+        float tw = 1.0 / _CustomRenderTextureWidth;
+        float th = 1.0 / _CustomRenderTextureHeight;
 
         float2 uv = i.globalTexcoord.xy;
         float4 duv = float4(tw, th, -tw, 0);
@@ -69,16 +81,17 @@ Shader "RDSystem/RDSystem"
         dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.wy).xy * 0.20;
         dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.xy).xy * 0.05;
 
-        // Apply click interaction (add seed 'v')
-        float aspect = _CustomRenderTextureWidth * th;
-        float2 uvAspect = uv;
-        uvAspect.x *= aspect;
-        float2 clickPosAspect = _ClickPos;
-        clickPosAspect.x *= aspect;
-        
-        float dist = distance(uvAspect, clickPosAspect);
-        float clickEffect = step(dist, _ClickRadius) * _ClickState;
-        q.y = saturate(q.y + clickEffect);
+        // Apply click interaction on sphere using angular distance
+        float3 dir = SphereUVToDir(uv);
+        float3 clickDir = SphereUVToDir(_ClickPos);
+
+        float cosAngle = dot(dir, clickDir);
+
+        // hard circular brush on sphere
+        float clickEffect = step(cos(_ClickRadius), cosAngle) * _ClickState;
+
+        // only place seed, do not add concentration
+        q.y = max(q.y, clickEffect);
 
         half ABB = q.x * q.y * q.y;
 
@@ -94,7 +107,6 @@ Shader "RDSystem/RDSystem"
     {
         Cull Off ZWrite Off ZTest Always
         
-        // Pass 0: Init
         Pass
         {
             Name "Init"
@@ -104,7 +116,6 @@ Shader "RDSystem/RDSystem"
             ENDHLSL
         }
         
-        // Pass 1: Update
         Pass
         {
             Name "Update"
