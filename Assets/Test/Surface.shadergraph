@@ -1690,8 +1690,8 @@
     "m_ObjectId": "432effa0e1cf43ca86e6827d58d18e6c",
     "m_Title": "Multipoint Sampling",
     "m_Position": {
-        "x": 0.0,
-        "y": 0.0
+        "x": -1371.1998291015625,
+        "y": 389.6000061035156
     }
 }
 
@@ -1842,8 +1842,8 @@
     "m_ObjectId": "5b112c66d87944eaa4940c1fce5fb34d",
     "m_Title": "Normal Calculation",
     "m_Position": {
-        "x": 0.0,
-        "y": 0.0
+        "x": -811.9999389648438,
+        "y": 591.9999389648438
     }
 }
 
@@ -3270,8 +3270,8 @@
     "m_ObjectId": "f2e5b87ed38c4da1b3f39916ae3d7f2c",
     "m_Title": "Smooth Threshold",
     "m_Position": {
-        "x": 0.0,
-        "y": 0.0
+        "x": -1142.4000244140625,
+        "y": 42.400001525878909
     }
 }
 

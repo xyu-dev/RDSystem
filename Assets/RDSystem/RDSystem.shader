@@ -11,8 +11,8 @@ Shader "RDSystem/RDSystem"
         [Space]
         _Du("Diffusion (u)", Range(0, 1)) = 1
         _Dv("Diffusion (v)", Range(0, 1)) = 0.4
-        _Feed("Feed", Range(0, 0.1)) = 0.05
-        _Kill("Kill", Range(0, 0.1)) = 0.05
+        _Feed("Feed", Range(0.02, 0.12)) = 0.05
+        _Kill("Kill", Range(0.01413, 0.07)) = 0.05
 
         [Header(Interaction)]
         [Space]
