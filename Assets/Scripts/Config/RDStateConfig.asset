@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4276bff1919ef184a865a163dfc6ab7a, type: 3}
+  m_Name: RDStateConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RDStateConfig
+  fullEngagementTime: 5
+  fullAbsenceTime: 4
+  instabilityWindow: 3
+  engagementRiseSpeed: 1.5
+  engagementFallSpeed: 1.2
+  instabilitySmoothSpeed: 2
+  absenceRiseSpeed: 1.5
+  absenceFallSpeed: 2.5
+  energySmoothSpeed: 2
+  engagementWeight: 0.6
+  instabilityWeight: 0.25
+  presenceWeight: 0.15

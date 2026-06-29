@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b912d2ca344d6dc4fb592abb22173901, type: 3}
+  m_Name: RDMappingConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RDMappingConfig
+  idleFeed: 0.037
+  idleKill: 0.06
+  engagementToFeed: 0.015
+  engagementToKill: -0.002
+  instabilityToFeed: 0.006
+  instabilityToKill: 0.004
+  absenceToFeed: -0.02
+  absenceToKill: 0.008
+  minFeed: 0.01
+  maxFeed: 0.09
+  minKill: 0.04
+  maxKill: 0.07
