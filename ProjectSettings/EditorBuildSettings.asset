@@ -8,5 +8,8 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/MouseInputTest.unity
     guid: ff5702dfe30c34fa2a680f20ba104712
-  m_configObjects: {}
+  m_configObjects:
+    Varjo.XR.Settings: {fileID: 11400000, guid: a6153f99379b390419cc9b21e6112ada, type: 2}
+    com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 3d3117c631d7b464d9ecf31ab6d8a841, type: 2}
+    com.unity.xr.management.loader_settings: {fileID: 11400000, guid: dae70186bc269054db39aac1764cd4d5, type: 2}
   m_UseUCBPForAssetBundles: 0

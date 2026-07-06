@@ -5,6 +5,9 @@ using UnityEngine;
 /// Final version:
 /// - Normal mode: ring center follows gaze point exactly
 /// - Chase mode: ring center randomly flips around gaze point in shader sphere space
+/// Works with any input source implementing:
+/// - IInteractionSignalSource
+/// - IInteractionUVSource
 /// </summary>
 public class RDController : MonoBehaviour
 {
@@ -19,7 +22,6 @@ public class RDController : MonoBehaviour
     [SerializeField] private RDBehaviorStateLayer stateLayer;
     [SerializeField] private LinearBehaviorMapper mapper;
     [SerializeField] private RDMaterialParameterDriver driver;
-    [SerializeField] private MouseInput mouseInput;
 
     [Header("Interaction Defaults")]
     [SerializeField] private float idleClickRadius = 0.25f;
@@ -42,6 +44,7 @@ public class RDController : MonoBehaviour
     [SerializeField] private bool debugShowRingMask = false;
 
     private IInteractionSignalSource signalSource;
+    private IInteractionUVSource uvSource;
 
     private RingMode currentMode = RingMode.Normal;
     private float chaseTimer = 0f;
@@ -54,10 +57,7 @@ public class RDController : MonoBehaviour
     private void Awake()
     {
         if (signalSourceBehaviour == null)
-            signalSourceBehaviour = GetComponent<MouseInput>();
-
-        if (mouseInput == null)
-            mouseInput = signalSourceBehaviour as MouseInput ?? GetComponent<MouseInput>();
+            signalSourceBehaviour = GetComponent<MonoBehaviour>();
 
         if (stateLayer == null)
             stateLayer = GetComponent<RDBehaviorStateLayer>();
@@ -69,14 +69,18 @@ public class RDController : MonoBehaviour
             driver = GetComponent<RDMaterialParameterDriver>();
 
         signalSource = signalSourceBehaviour as IInteractionSignalSource;
+        uvSource = signalSourceBehaviour as IInteractionUVSource;
 
         if (signalSource == null)
             Debug.LogError("[RDController] signalSourceBehaviour must implement IInteractionSignalSource.");
+
+        if (uvSource == null)
+            Debug.LogError("[RDController] signalSourceBehaviour must implement IInteractionUVSource.");
     }
 
     private void Update()
     {
-        if (signalSource == null || stateLayer == null || mapper == null || driver == null || mouseInput == null)
+        if (signalSource == null || uvSource == null || stateLayer == null || mapper == null || driver == null)
             return;
 
         stateLayer.Tick(signalSource);
@@ -87,7 +91,7 @@ public class RDController : MonoBehaviour
         target.clickState = signalSource.IsGazing ? 1f : 0f;
         target.clickRadius = signalSource.IsGazing ? gazeClickRadius : idleClickRadius;
 
-        Vector3 gazeDir = SphereUVToDir_CSharp(mouseInput.CurrentUV);
+        Vector3 gazeDir = SphereUVToDir_CSharp(uvSource.CurrentUV);
         Vector3 finalDir = ResolveRingDirection(gazeDir, signalSource.IsGazing);
 
         target.clickDir = finalDir;
@@ -96,10 +100,6 @@ public class RDController : MonoBehaviour
         driver.SetDebugShowRingMask(debugShowRingMask);
     }
 
-    /// <summary>
-    /// Match shader's SphereUVToDir() exactly.
-    /// This is the key fix.
-    /// </summary>
     private Vector3 SphereUVToDir_CSharp(Vector2 uv)
     {
         const float PI = 3.14159265359f;
@@ -174,7 +174,6 @@ public class RDController : MonoBehaviour
         chaseTimer = Random.Range(chaseDurationRange.x, chaseDurationRange.y);
 
         int pattern = PickFlipPattern();
-
         chaseFlipHorizontal = (pattern == 0 || pattern == 2);
         chaseFlipVertical = (pattern == 1 || pattern == 2);
     }
@@ -184,9 +183,9 @@ public class RDController : MonoBehaviour
         int[] patterns = new int[3];
         int count = 0;
 
-        if (allowFlipHorizontal) patterns[count++] = 0; // left-right
-        if (allowFlipVertical) patterns[count++] = 1;   // up-down
-        if (allowFlipBoth) patterns[count++] = 2;       // both
+        if (allowFlipHorizontal) patterns[count++] = 0;
+        if (allowFlipVertical) patterns[count++] = 1;
+        if (allowFlipBoth) patterns[count++] = 2;
 
         if (count == 0)
             return 0;
@@ -194,25 +193,18 @@ public class RDController : MonoBehaviour
         return patterns[Random.Range(0, count)];
     }
 
-    /// <summary>
-    /// Chase mode works in UV-derived shader sphere space.
-    /// Horizontal = longitude mirror (x/z swap sign style)
-    /// Vertical   = latitude mirror (flip y)
-    /// </summary>
     private Vector3 BuildChaseDirection(Vector3 gazeDir)
     {
         Vector3 d = gazeDir.normalized;
 
         if (chaseFlipHorizontal)
         {
-            // Mirror across vertical axis: invert x/z around sphere longitude
             d.x *= -1f;
             d.z *= -1f;
         }
 
         if (chaseFlipVertical)
         {
-            // Mirror across equator: invert y
             d.y *= -1f;
         }
 

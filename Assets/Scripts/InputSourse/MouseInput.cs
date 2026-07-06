@@ -7,7 +7,7 @@ using UnityEngine.EventSystems;
 /// </summary>
 public class MouseInput : MonoBehaviour, IInteractionSignalSource,
     IPointerDownHandler, IDragHandler,
-    IPointerUpHandler, IPointerExitHandler
+    IPointerUpHandler, IPointerExitHandler, IInteractionUVSource
 {
     public event System.Action<Vector2> OnInteractionStart;
     public event System.Action<Vector2> OnInteractionUpdate;

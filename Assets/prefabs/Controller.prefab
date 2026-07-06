@@ -1,0 +1,168 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &1652601993805638479
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1989001219025827062}
+  - component: {fileID: 7069645070048664291}
+  - component: {fileID: 6472825163295996473}
+  - component: {fileID: 436655545288707399}
+  - component: {fileID: 6003260517929653120}
+  m_Layer: 0
+  m_Name: Controller
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1989001219025827062
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1652601993805638479}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -0.80878, y: 0.27176, z: 0.50441}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &7069645070048664291
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1652601993805638479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7e1469e5bacfc08449d11490acb01d63, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RDBehaviorStateLayer
+  config: {fileID: 11400000, guid: 0c32336dac1c5b642930fb7bd0377ba7, type: 2}
+--- !u!114 &6472825163295996473
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1652601993805638479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b70f30bdf61a04429fc2db856994cfd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::LinearBehaviorMapper
+  config: {fileID: 11400000, guid: ab230a18d3c9bce4fa8fa0560301fd46, type: 2}
+  mouseInput: {fileID: 0}
+  classes:
+  - label: epsilon
+    fk: {x: 0.022, y: 0.059}
+    idleWeight: 0.9
+    gazeWeight: 1.1
+    brownRadiusMul: 1
+  - label: zeta
+    fk: {x: 0.026, y: 0.059}
+    idleWeight: 1.1
+    gazeWeight: 1
+    brownRadiusMul: 0.95
+  - label: lambda
+    fk: {x: 0.026, y: 0.061}
+    idleWeight: 1.3
+    gazeWeight: 1
+    brownRadiusMul: 0.9
+  - label: delta
+    fk: {x: 0.03, y: 0.055}
+    idleWeight: 1.15
+    gazeWeight: 1
+    brownRadiusMul: 0.95
+  - label: theta
+    fk: {x: 0.03, y: 0.057}
+    idleWeight: 1.25
+    gazeWeight: 1.05
+    brownRadiusMul: 1
+  - label: kappa
+    fk: {x: 0.05, y: 0.063}
+    idleWeight: 0.75
+    gazeWeight: 1.25
+    brownRadiusMul: 1.15
+  - label: pi
+    fk: {x: 0.062, y: 0.061}
+    idleWeight: 0.6
+    gazeWeight: 1.35
+    brownRadiusMul: 1.2
+  idleClassInterval: 8
+  gazeClassInterval: 2.8
+  classBlendSpeed: 1.15
+  switchImpulseSeconds: 0.8
+  idleBrownRadius: 0.00025
+  gazeBrownRadius: 0.0018
+  brownAccel: 0.8
+  brownDamping: 0.92
+  headMotionBoost: 1.1
+  switchBoost: 0.7
+  eyeJumpBoost: 1.8
+  idleMicroAmp: 0.00008
+  idleMicroSpeed: 0.16
+  gazeMicroAmp: 0.00022
+  gazeMicroSpeed: 0.34
+  agitationFeedBias: 0.0016
+  agitationKillBias: 0.001
+  noveltyFeedBias: 0.0014
+  noveltyKillBias: 0.0012
+  eyeJumpFeedKick: 0.002
+  eyeJumpKillKick: 0.0016
+  headMotionFeedBias: 0.001
+  headMotionKillBias: 0.0008
+  feedBounds: {x: 0.021, y: 0.063}
+  killBounds: {x: 0.054, y: 0.0645}
+  boundRepelMargin: 0.0012
+  boundRepelStrength: 0.35
+  outputLerpSpeed: 3
+--- !u!114 &436655545288707399
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1652601993805638479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 48f1c72ccad98f14e9bb3de2ad9a2e39, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RDMaterialParameterDriver
+  rdTexture: {fileID: 8600000, guid: 7e1a1b312b90f4c698d64e3ccdcb0957, type: 2}
+  outputConfig: {fileID: 11400000, guid: 6e17dec6e6f9a3144a3e9634d30f2b53, type: 2}
+--- !u!114 &6003260517929653120
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1652601993805638479}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 47f2e91e462091046b71398efc88be3f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RDController
+  signalSourceBehaviour: {fileID: 0}
+  stateLayer: {fileID: 7069645070048664291}
+  mapper: {fileID: 6472825163295996473}
+  driver: {fileID: 436655545288707399}
+  idleClickRadius: 0.05
+  gazeClickRadius: 0.1
+  enableChaseMode: 1
+  chaseTriggerChancePerSecond: 0.1
+  chaseDurationRange: {x: 0.6, y: 1.4}
+  allowFlipHorizontal: 1
+  allowFlipVertical: 1
+  allowFlipBoth: 1
+  directionSmoothSpeed: 14
+  debugShowRingMask: 0
