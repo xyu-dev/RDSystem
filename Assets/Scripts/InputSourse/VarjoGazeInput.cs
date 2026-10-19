@@ -4,7 +4,8 @@ using UnityEngine;
 using UnityEngine.XR;
 using Varjo.XR;
 
-public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteractionUVSource
+public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteractionUVSource,
+    IInteractionHealthSource
 {
     public event System.Action<Vector2> OnInteractionStart;
     public event System.Action<Vector2> OnInteractionUpdate;
@@ -39,6 +40,62 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
     public float GazeDuration => InteractionTime;
     public Vector3 InteractionDirection => CurrentDir;
 
+    // ------------------------------------------------------------ tracking health
+    //
+    // Evaluated on demand rather than cached in Update, so the router can poll it even while
+    // this component is disabled and decide whether to hand control back to the headset.
+
+    public bool IsTracking => EvaluateTracking(out _);
+
+    public string TrackingStatus
+    {
+        get
+        {
+            EvaluateTracking(out string status);
+            return status;
+        }
+    }
+
+    private bool EvaluateTracking(out string status)
+    {
+        if (xrCamera == null && Camera.main == null)
+        {
+            status = "no XR camera";
+            return false;
+        }
+
+        try
+        {
+            if (!VarjoEyeTracking.IsGazeAllowed())
+            {
+                status = "gaze not allowed (enable eye tracking in Varjo Base)";
+                return false;
+            }
+
+            if (!VarjoEyeTracking.IsGazeCalibrated())
+            {
+                status = "eye tracking not calibrated - run calibration for this visitor";
+                return false;
+            }
+
+            if (VarjoEyeTracking.GetGaze().status == VarjoEyeTracking.GazeStatus.Invalid)
+            {
+                status = "gaze invalid (headset not worn or eyes not found)";
+                return false;
+            }
+        }
+        catch (System.Exception e)
+        {
+            // Thrown when the Varjo runtime or XR loader is not present at all, e.g. on a
+            // desktop machine with no headset attached.
+            status = "Varjo runtime unavailable (" + e.GetType().Name + ")";
+            return false;
+        }
+
+        status = "";
+        return true;
+    }
+
     private readonly List<InputDevice> devices = new List<InputDevice>();
     private InputDevice device;
     private Eyes eyes;
@@ -68,23 +125,20 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
     {
         if (xrCamera == null)
         {
-            EndInteractionIfNeeded();
-            TickNoGaze();
+            LoseGaze();
             return;
         }
 
         bool gazeReady = VarjoEyeTracking.IsGazeAllowed() && VarjoEyeTracking.IsGazeCalibrated();
         if (!gazeReady)
         {
-            EndInteractionIfNeeded();
-            TickNoGaze();
+            LoseGaze();
             return;
         }
 
         if (!TryBuildGazeRay(out rayOrigin, out rayDirection))
         {
-            EndInteractionIfNeeded();
-            TickNoGaze();
+            LoseGaze();
             return;
         }
 
@@ -102,9 +156,7 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
 
         if (!validHit)
         {
-            EndInteractionIfNeeded();
-            TickNoGaze();
-            wasInteractingLastFrame = false;
+            LoseGaze();
             return;
         }
 
@@ -213,5 +265,21 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
         NoGazeDuration += Time.deltaTime;
         HeadMotion = 0f;
         EyeJump = false;
+    }
+
+    /// <summary>
+    /// Every way of losing the gaze this frame, handled identically.
+    ///
+    /// Clearing wasInteractingLastFrame is the point: without it, a momentary dropout - a blink,
+    /// a headset adjustment, one invalid frame during calibration - ends the interaction but
+    /// leaves the flag set, so when gaze returns the re-acquisition branch is skipped. No
+    /// SwitchCount increment, no OnInteractionStart. The visitor looks away and back and the
+    /// machine records nothing. In a gallery, that is most of the dropouts.
+    /// </summary>
+    private void LoseGaze()
+    {
+        EndInteractionIfNeeded();
+        TickNoGaze();
+        wasInteractingLastFrame = false;
     }
 }

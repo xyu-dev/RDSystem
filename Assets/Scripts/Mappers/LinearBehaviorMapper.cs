@@ -13,7 +13,9 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
     }
 
     [SerializeField] private RDMappingConfig config;
-    [SerializeField] private MouseInput mouseInput;
+    [Tooltip("Any component implementing IInteractionUVSource. Normally the RDInputSourceRouter.")]
+    [SerializeField] private MonoBehaviour uvSourceBehaviour;
+    private IInteractionUVSource uvSource;
 
     [Header("Pearson Safe Classes")]
     [SerializeField] private PearsonClassDef[] classes = new PearsonClassDef[]
@@ -58,6 +60,29 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
     [SerializeField] private float headMotionFeedBias = 0.0010f;
     [SerializeField] private float headMotionKillBias = 0.0008f;
 
+    [Header("Greedy Strategy")]
+    [Tooltip("Optional. When assigned, the bandit's current strategy biases which Pearson class " +
+             "the pattern drifts toward, and how hard it grows. Leave empty for unsteered behaviour.")]
+    [SerializeField] private RDGreedyDirector director;
+
+    [Tooltip("How strongly the strategy's favoured class is preferred when picking the next one.")]
+    [Range(0f, 8f)] [SerializeField] private float strategyClassPull = 3f;
+
+    [Tooltip("Feed shift at full positive growth bias.")]
+    [SerializeField] private float strategyGrowthFeed = 0.004f;
+
+    [Header("Long-Term Memory")]
+    [Tooltip("How much accumulated familiarity flattens the machine's reaction to novelty. " +
+             "1 = a well-visited machine is no longer surprised by anything.")]
+    [Range(0f, 1f)] [SerializeField] private float familiarityNoveltyDamping = 0.6f;
+
+    [Tooltip("How much accumulated fatigue slows class transitions. 1 = an exhausted machine " +
+             "takes twice as long to change state.")]
+    [Range(0f, 1f)] [SerializeField] private float fatigueIntervalStretch = 0.8f;
+
+    [Tooltip("How much accumulated fatigue pulls feed back toward the idle baseline.")]
+    [SerializeField] private float fatigueFeedDrag = 0.0025f;
+
     [Header("Safety Bounds")]
     [SerializeField] private Vector2 feedBounds = new Vector2(0.021f, 0.063f);
     [SerializeField] private Vector2 killBounds = new Vector2(0.054f, 0.0645f);
@@ -83,14 +108,34 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
     private int lastSwitchCount;
     private float eyeJumpImpulse;
 
+    /// <summary>Index of the Pearson class the pattern is heading toward. Read by the music conductor.</summary>
+    public int CurrentClassIndex => toClass;
+
+    /// <summary>Label of that class, e.g. "kappa". Useful on the operator overlay.</summary>
+    public string CurrentClassLabel =>
+        (classes != null && classes.Length > 0)
+            ? classes[Mathf.Clamp(toClass, 0, classes.Length - 1)].label
+            : "";
+
+    /// <summary>How many Pearson classes are defined. The conductor maps one mode per class.</summary>
+    public int ClassCount => classes != null ? classes.Length : 0;
+
+    /// <summary>0..1 progress of the blend between the previous class and the current one.</summary>
+    public float ClassBlend => classBlend;
+
     void Reset()
     {
-        if (mouseInput == null)
-            mouseInput = GetComponent<MouseInput>();
+        if (uvSourceBehaviour == null)
+            uvSourceBehaviour = GetComponent<RDInputSourceRouter>();
     }
 
     void Awake()
     {
+        uvSource = uvSourceBehaviour as IInteractionUVSource;
+
+        if (uvSourceBehaviour != null && uvSource == null)
+            Debug.LogError("[LinearBehaviorMapper] uvSourceBehaviour must implement IInteractionUVSource.");
+
         InitIfNeeded();
     }
 
@@ -120,7 +165,7 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
 
         RDTarget t = new RDTarget();
 
-        t.clickPos = mouseInput != null ? mouseInput.CurrentUV : Vector2.zero;
+        t.clickPos = uvSource != null ? uvSource.CurrentUV : Vector2.zero;
         t.clickRadius = config != null ? config.idleRadius : 0.05f;
 
         if (state.isGazing)
@@ -162,13 +207,16 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
 
     private void TickClassTransition(RDBehaviorState state, float dt)
     {
-        float switch01 = Mathf.Clamp01(state.switchCount / 6f);
+        float switch01 = state.switchActivity;
 
         float interval = state.isGazing
             ? Mathf.Lerp(gazeClassInterval, gazeClassInterval * 0.45f, state.attention)
             : Mathf.Lerp(idleClassInterval * 0.70f, idleClassInterval, Mathf.Clamp01(state.noGazeDuration * 0.25f));
 
         interval *= Mathf.Lerp(1f, 0.7f, switch01);
+
+        // A tired machine changes its mind more slowly.
+        interval *= 1f + state.fatigue * fatigueIntervalStretch;
 
         classTimer += dt;
         classBlend += dt * classBlendSpeed / Mathf.Max(0.1f, interval);
@@ -190,7 +238,7 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
 
         float total = 0f;
         float[] weights = new float[classes.Length];
-        float switch01 = Mathf.Clamp01(state.switchCount / 6f);
+        float switch01 = state.switchActivity;
 
         for (int i = 0; i < classes.Length; i++)
         {
@@ -210,6 +258,11 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
 
             w *= 1f + switch01 * (i >= 4 ? 0.45f : 0.15f);
             w *= 1f + Mathf.Clamp01(state.headMotion) * (i >= 5 ? 0.35f : 0.12f);
+
+            // The greedy algorithm does not dictate the class outright; it weights the dice. The
+            // pattern still wanders, so the steering is felt as a tendency rather than seen as a cut.
+            if (director != null && director.HasCatalogue && i == director.Current.favouredClass)
+                w *= 1f + strategyClassPull;
 
             if (state.eyeJump)
                 w *= (i >= 5 ? 1.35f : 1.08f);
@@ -233,7 +286,7 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
 
     private void TickBrownian(RDBehaviorState state, float dt)
     {
-        float switch01 = Mathf.Clamp01(state.switchCount / 6f);
+        float switch01 = state.switchActivity;
         float motion01 = Mathf.Clamp01(state.headMotion);
 
         float radius = state.isGazing
@@ -295,16 +348,27 @@ public class LinearBehaviorMapper : MonoBehaviour, IRDParameterMapper
         target.y += Mathf.Cos(localTime * microSpeed * 1.3f + 0.8f) * microAmp * 0.85f;
 
         float motion01 = Mathf.Clamp01(state.headMotion);
-        float switch01 = Mathf.Clamp01(state.switchCount / 6f);
+        float switch01 = state.switchActivity;
+
+        // Familiarity blunts the novelty response: the more gaze this machine has absorbed over
+        // its life, the less any single new visitor registers as new.
+        float noveltyGain = 1f - state.familiarity * familiarityNoveltyDamping;
 
         if (state.isGazing)
         {
             target.x += state.agitation * agitationFeedBias;
             target.y += state.agitation * agitationKillBias;
 
-            target.x += (state.novelty - 0.5f) * noveltyFeedBias;
-            target.y += (state.novelty - 0.5f) * noveltyKillBias;
+            target.x += (state.novelty - 0.5f) * noveltyFeedBias * noveltyGain;
+            target.y += (state.novelty - 0.5f) * noveltyKillBias * noveltyGain;
         }
+
+        // Fatigue drags growth back down toward the idle baseline.
+        target.x -= state.fatigue * fatigueFeedDrag;
+
+        // The current strategy's growth bias.
+        if (director != null && director.HasCatalogue)
+            target.x += director.Current.growth * strategyGrowthFeed;
 
         target.x += motion01 * headMotionFeedBias * (state.isGazing ? 1f : 0.4f);
         target.y += motion01 * headMotionKillBias * (state.isGazing ? 1f : 0.4f);

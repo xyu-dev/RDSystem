@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/Exhibition.unity
+    guid: d8f167e0d3371494d873e3a357f0472a
+  - enabled: 1
     path: Assets/Scenes/MouseInputTest.unity
     guid: ff5702dfe30c34fa2a680f20ba104712
   m_configObjects:

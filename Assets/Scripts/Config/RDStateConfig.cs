@@ -13,6 +13,16 @@ public class RDStateConfig : ScriptableObject
     [Header("Novelty")]
     public float noveltyHoldTime = 0.2f;
 
+    [Header("Switch Activity")]
+    [Tooltip("Length of the sliding window used to measure gaze switching, in seconds.")]
+    public float switchWindow = 6f;
+
+    [Tooltip("How many switches inside the window count as fully active (switchActivity = 1).")]
+    public int switchesForFullActivity = 6;
+
+    [Tooltip("Smoothing applied to switchActivity. Higher = snappier.")]
+    [Range(0f, 30f)] public float switchActivitySmooth = 6f;
+
     [Header("Smoothing")]
     [Range(0f, 30f)] public float attentionSmooth = 10f;
     [Range(0f, 30f)] public float agitationSmooth = 12f;

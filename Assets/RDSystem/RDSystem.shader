@@ -11,6 +11,7 @@ Shader "RDSystem/RDSystem"
         _Dv("Diffusion (v)", Range(0, 1)) = 0.4
         _Feed("Feed", Range(0.02, 0.12)) = 0.035
         _Kill("Kill", Range(0.01413, 0.07)) = 0.057
+        _StepScale("Stencil Step Scale", Range(0.5, 4)) = 1
 
         [Header(Interaction), Space]
         _ClickState("Click State", Float) = 0
@@ -54,6 +55,7 @@ Shader "RDSystem/RDSystem"
 
     half _Du, _Dv;
     half _Feed, _Kill;
+    float _StepScale;
 
     float _ClickState;
     float4 _ClickDir;
@@ -104,6 +106,75 @@ Shader "RDSystem/RDSystem"
         dir.z = sin(theta) * sin(phi);
 
         return normalize(dir);
+    }
+
+    /// The angular size of the coarsest texel. In an equirectangular map a u-texel subtends
+    /// 2*pi/W of longitude at the equator while a v-texel subtends only pi/H of latitude, so on a
+    /// square texture the u-texel is twice the v-texel. Step by the smaller of the two and the
+    /// horizontal neighbours land half a texel away, bilinear filtering averages them with the
+    /// centre, horizontal diffusion is halved, and the pattern locks onto the texel grid. Taking
+    /// the max is what keeps every neighbour at least one whole texel out.
+    float SphereTexelAngle()
+    {
+        float lonTexel = 2.0 * RD_PI / max(1.0, _CustomRenderTextureWidth);
+        float latTexel = RD_PI / max(1.0, _CustomRenderTextureHeight);
+        return max(lonTexel, latTexel);
+    }
+
+    /// Sample the state at a UV that may have stepped off the top or bottom of the map. Crossing
+    /// a pole continues onto the opposite meridian - v folds back, u gains half a turn - which is
+    /// both geometrically right and what keeps every tap inside the texture without a clamp.
+    half2 SampleStateUV(float2 uv)
+    {
+        float belowPole = step(uv.y, 0.0);
+        float abovePole = step(1.0, uv.y);
+        float crossed = max(belowPole, abovePole);
+
+        uv.y = lerp(uv.y, -uv.y, belowPole);
+        uv.y = lerp(uv.y, 2.0 - uv.y, abovePole);
+        uv.x = frac(uv.x + crossed * 0.5);
+
+        return SAMPLE_TEXTURE2D_LOD(_SelfTexture2D, sampler_SelfTexture2D, uv, 0).xy;
+    }
+
+    /// Nine-point Laplacian whose neighbours sit at a constant ARC LENGTH rather than a constant
+    /// UV offset. A v-offset spans pi of latitude, but a u-offset spans only 2*pi*sin(theta) of
+    /// longitude - shrinking to nothing as the latitude circle closes at the poles. That is what
+    /// collapsed the stencil onto its own centre and produced the pole deformation.
+    ///
+    /// Matching the two arcs needs one factor: scale the u-offset by 1/sin(theta). That is the
+    /// whole correction, and it costs a single sine per fragment rather than an acos and an atan2
+    /// per tap, which is why this replaced the direction-space version - same geometry, a small
+    /// fraction of the cost.
+    ///
+    /// Weights are the original 0.20 / 0.05 so Du, Dv, feed and kill keep their tuning: both sets
+    /// sum to one, only where the samples are taken has changed.
+    half2 SphericalLaplacian(float2 uv, half2 centre)
+    {
+        float arc = SphereTexelAngle() * max(0.01, _StepScale);
+
+        float sinTheta = sin(uv.y * RD_PI);
+
+        float dv = arc / RD_PI;
+        float du = arc / (2.0 * RD_PI * max(sinTheta, 1e-4));
+
+        // Half the map is 180 degrees of longitude, the furthest a neighbour can usefully sit.
+        // Only the top and bottom row or so ever reach this, and there the entire latitude circle
+        // is a texel or two across, so "the opposite side of the polar circle" is the right
+        // neighbour regardless.
+        du = min(du, 0.5);
+
+        half2 e  = SampleStateUV(uv + float2( du, 0.0));
+        half2 w  = SampleStateUV(uv + float2(-du, 0.0));
+        half2 nr = SampleStateUV(uv + float2(0.0,  dv));
+        half2 s  = SampleStateUV(uv + float2(0.0, -dv));
+
+        half2 ne = SampleStateUV(uv + float2( du,  dv));
+        half2 nw = SampleStateUV(uv + float2(-du,  dv));
+        half2 se = SampleStateUV(uv + float2( du, -dv));
+        half2 sw = SampleStateUV(uv + float2(-du, -dv));
+
+        return (e + w + nr + s) * 0.20 + (ne + nw + se + sw) * 0.05 - centre;
     }
 
     float3 SafeClickDir()
@@ -240,19 +311,10 @@ Shader "RDSystem/RDSystem"
         float th = 1.0 / _CustomRenderTextureHeight;
 
         float2 uv = i.globalTexcoord.xy;
-        float4 duv = float4(tw, th, -tw, 0);
 
         half2 q = SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv).xy;
 
-        half2 dq = -q;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv - duv.xy).xy * 0.05;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv - duv.wy).xy * 0.20;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv - duv.zy).xy * 0.05;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.zw).xy * 0.20;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.xw).xy * 0.20;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.zy).xy * 0.05;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.wy).xy * 0.20;
-        dq += SAMPLE_TEXTURE2D(_SelfTexture2D, sampler_SelfTexture2D, uv + duv.xy).xy * 0.05;
+        half2 dq = SphericalLaplacian(uv, q);
 
         float ringMask = ComputeRingMask(uv);
 

@@ -23,3 +23,16 @@ ReflectionProbe-*.exr
 ReflectionProbe-*.exr.meta
 LightingData.asset
 LightingData.asset.meta
+
+# Research / reading material (large PDFs & EPUBs, not part of the build)
+/Reference
+
+# Claude working docs (notes to myself, not part of the build)
+/Docs
+
+# Vendor driver blob
+/ExtendedTools
+
+# Unity crash-recovery scene dumps
+/Assets/_Recovery
+/Assets/_Recovery.meta

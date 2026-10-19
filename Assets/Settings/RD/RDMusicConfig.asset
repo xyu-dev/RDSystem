@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ee2a63b58f536de43a74b4dca24958f8, type: 3}
+  m_Name: RDMusicConfig
+  m_EditorClassIdentifier: Assembly-CSharp::RDMusicConfig
+  rootHz: 73.42
+  transpose: 0
+  slowStepSeconds: 1.35
+  fastStepSeconds: 0.2
+  cycleSteps: 16
+  attentionDrive: 0.65
+  agitationDrive: 0.45
+  switchDrive: 0.35
+  idleDrumChance: 0.04
+  activeDrumChance: 0.78
+  kendangLowHz: 96
+  kendangHighHz: 210
+  kendangDecay: 0.42
+  gongEveryCycles: 1
+  gongDecay: 7.5
+  gongBendSemitones: 0.7
+  idleBellInterval: {x: 11, y: 26}
+  bellEveryCycles: 2
+  templeBellDecay: 9
+  rinDecay: 6
+  pipaEntryAttention: 0.35
+  pipaDensity: 0.55
+  pipaDecay: 2.6
+  pipaOctave: 3
+  templeBellLevel: 0.85
+  rinLevel: 0.5
+  kendangLevel: 0.62
+  gongLevel: 0.9
+  pipaLevel: 0.44
+  panFollowsRing: 0.8

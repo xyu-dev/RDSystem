@@ -40,8 +40,31 @@ public class RDController : MonoBehaviour
     [Header("Direction Motion")]
     [SerializeField] private float directionSmoothSpeed = 16f;
 
+    [Header("Greedy Strategy")]
+    [Tooltip("Optional. When assigned, the bandit's current strategy scales the ring size and how " +
+             "readily the ring evades the gaze.")]
+    [SerializeField] private RDGreedyDirector director;
+
+    [Tooltip("Ring radius at strategy ringWidth = 0 and = 1, in radians.")]
+    [SerializeField] private Vector2 strategyRadiusRange = new Vector2(0.12f, 0.55f);
+
+    [Tooltip("Chase trigger chance per second at strategy evasion = 1.")]
+    [SerializeField] private float strategyMaxChaseChance = 0.6f;
+
     [Header("Debug")]
     [SerializeField] private bool debugShowRingMask = false;
+
+    /// <summary>Latest behaviour reading. Consumed by the music conductor.</summary>
+    public RDBehaviorState CurrentState { get; private set; }
+
+    /// <summary>Latest RD parameters written to the material. Consumed by the music conductor.</summary>
+    public RDTarget CurrentTarget { get; private set; }
+
+    /// <summary>True while the ring is evading the viewer's gaze.</summary>
+    public bool ChaseActive => currentMode == RingMode.Chase;
+
+    /// <summary>Smoothed ring direction in shader sphere space.</summary>
+    public Vector3 RingDirection => smoothRingDir;
 
     private IInteractionSignalSource signalSource;
     private IInteractionUVSource uvSource;
@@ -89,7 +112,17 @@ public class RDController : MonoBehaviour
         RDTarget target = mapper.Evaluate(state);
 
         target.clickState = signalSource.IsGazing ? 1f : 0f;
-        target.clickRadius = signalSource.IsGazing ? gazeClickRadius : idleClickRadius;
+
+        // The greedy algorithm decides how big the reactive ring is; the gaze decides where.
+        float activeRadius = gazeClickRadius;
+
+        if (director != null && director.HasCatalogue)
+        {
+            activeRadius = Mathf.Lerp(
+                strategyRadiusRange.x, strategyRadiusRange.y, Mathf.Clamp01(director.Current.ringWidth));
+        }
+
+        target.clickRadius = signalSource.IsGazing ? activeRadius : idleClickRadius;
 
         Vector3 gazeDir = SphereUVToDir_CSharp(uvSource.CurrentUV);
         Vector3 finalDir = ResolveRingDirection(gazeDir, signalSource.IsGazing);
@@ -98,6 +131,9 @@ public class RDController : MonoBehaviour
 
         driver.Apply(target);
         driver.SetDebugShowRingMask(debugShowRingMask);
+
+        CurrentState = state;
+        CurrentTarget = target;
     }
 
     private Vector3 SphereUVToDir_CSharp(Vector2 uv)
@@ -163,7 +199,12 @@ public class RDController : MonoBehaviour
             return;
         }
 
-        float trigger = chaseTriggerChancePerSecond * Time.deltaTime;
+        float chancePerSecond = chaseTriggerChancePerSecond;
+
+        if (director != null && director.HasCatalogue)
+            chancePerSecond = strategyMaxChaseChance * Mathf.Clamp01(director.Current.evasion);
+
+        float trigger = chancePerSecond * Time.deltaTime;
         if (Random.value < trigger)
             EnterChaseMode();
     }
