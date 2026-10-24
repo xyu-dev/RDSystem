@@ -10,7 +10,8 @@ using UnityEngine;
 /// the pointer instead of freezing.
 /// </summary>
 public class RDInputSourceRouter : MonoBehaviour,
-    IInteractionSignalSource, IInteractionUVSource, IInteractionHealthSource
+    IInteractionSignalSource, IInteractionUVSource, IInteractionHealthSource,
+    IInteractionCalibrationSource
 {
     public enum SourceSelection
     {
@@ -45,6 +46,7 @@ public class RDInputSourceRouter : MonoBehaviour,
     private IInteractionSignalSource preferredSignal;
     private IInteractionUVSource preferredUV;
     private IInteractionHealthSource preferredHealth;
+    private IInteractionCalibrationSource preferredCalibration;
 
     private IInteractionSignalSource fallbackSignal;
     private IInteractionUVSource fallbackUV;
@@ -65,6 +67,7 @@ public class RDInputSourceRouter : MonoBehaviour,
         preferredSignal = preferredSource as IInteractionSignalSource;
         preferredUV = preferredSource as IInteractionUVSource;
         preferredHealth = preferredSource as IInteractionHealthSource;
+        preferredCalibration = preferredSource as IInteractionCalibrationSource;
 
         fallbackSignal = fallbackSource as IInteractionSignalSource;
         fallbackUV = fallbackSource as IInteractionUVSource;
@@ -183,6 +186,21 @@ public class RDInputSourceRouter : MonoBehaviour,
     public Vector2 CurrentUV => ActiveUV != null ? ActiveUV.CurrentUV : Vector2.zero;
 
     public bool IsTracking => ActiveHealth == null || ActiveHealth.IsTracking;
+
+    public bool CanCalibrate => preferredCalibration != null && preferredCalibration.CanCalibrate;
+
+    /// <summary>
+    /// Always calibrates the PREFERRED source, never the active one.
+    ///
+    /// Calibration is precisely what the operator does while the router has fallen back to the
+    /// pointer - that is what "not calibrated" means - and a mouse has nothing to calibrate.
+    /// Routing this to the active source would make the button do nothing exactly when it is
+    /// needed. Works on a disabled component too, which the preferred source will be.
+    /// </summary>
+    public bool RequestCalibration()
+    {
+        return preferredCalibration != null && preferredCalibration.RequestCalibration();
+    }
 
     public string TrackingStatus
     {

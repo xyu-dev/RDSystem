@@ -1,5 +1,15 @@
 Shader "RDSystem/RDDisplayInk"
 {
+    // The smooth ink display: the original, with the fresnel rim and the fake specular that make
+    // the sphere read as a surface rather than a projection.
+    //
+    // Ported from the built-in pipeline to URP. It used UnityCG.cginc, UnityObjectToClipPos and
+    // tex2D, which still compile under URP - that is the trap. They compile, they render, and
+    // they render to the left eye only, because a built-in-pipeline pass has no notion of the
+    // instanced stereo pass Varjo runs. Pressing RD/Display/Use Smooth Ink therefore blinded the
+    // right lens while reporting no error at all. The shading maths below is untouched; only the
+    // pipeline plumbing changed.
+
     Properties
     {
         _MainTex("RD Texture", 2D) = "white" {}
@@ -35,75 +45,111 @@ Shader "RDSystem/RDDisplayInk"
 
     SubShader
     {
-        Tags { "RenderType"="Opaque" "Queue"="Geometry" }
+        Tags
+        {
+            "RenderType" = "Opaque"
+            "Queue" = "Geometry"
+            "RenderPipeline" = "UniversalPipeline"
+        }
         LOD 200
 
         Pass
         {
+            Name "Ink"
+            Tags { "LightMode" = "UniversalForward" }
+
+            Cull Off
+
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "UnityCG.cginc"
+            // XR single-pass instanced: both eyes come out of one draw, and without these the
+            // shader only ever writes eye 0 - the right lens stays black.
+            #pragma multi_compile_instancing
 
-            sampler2D _MainTex;
-            float4 _MainTex_ST;
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
-            float4 _BackgroundColor;
+            TEXTURE2D(_MainTex);
+            SAMPLER(sampler_MainTex);
 
-            float4 _CoreColor;
-            float _CoreThreshold;
-            float _CoreSoftness;
+            CBUFFER_START(UnityPerMaterial)
+                float4 _MainTex_ST;
 
-            float4 _HaloColor;
-            float _HaloThreshold;
-            float _HaloSoftness;
-            float _HaloIntensity;
+                float4 _BackgroundColor;
 
-            float _ValuePower;
-            float _ValueGain;
+                float4 _CoreColor;
+                float _CoreThreshold;
+                float _CoreSoftness;
 
-            float4 _FresnelColor;
-            float _FresnelPower;
-            float _FresnelIntensity;
+                float4 _HaloColor;
+                float _HaloThreshold;
+                float _HaloSoftness;
+                float _HaloIntensity;
 
-            float4 _SpecColor;
-            float _SpecPower;
-            float _SpecIntensity;
+                float _ValuePower;
+                float _ValueGain;
 
-            struct appdata
+                float4 _FresnelColor;
+                float _FresnelPower;
+                float _FresnelIntensity;
+
+                float4 _SpecColor;
+                float _SpecPower;
+                float _SpecIntensity;
+            CBUFFER_END
+
+            struct Attributes
             {
-                float4 vertex : POSITION;
-                float3 normal : NORMAL;
-                float2 uv : TEXCOORD0;
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+                float2 uv         : TEXCOORD0;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
-            struct v2f
+            struct Varyings
             {
-                float2 uv : TEXCOORD0;
-                float3 worldNormal : TEXCOORD1;
-                float3 viewDir : TEXCOORD2;
-                float3 worldPos : TEXCOORD3;
-                float4 vertex : SV_POSITION;
+                float2 uv          : TEXCOORD0;
+                float3 normalWS    : TEXCOORD1;
+                float3 viewDirWS   : TEXCOORD2;
+                float3 positionWS  : TEXCOORD3;
+                float4 positionCS  : SV_POSITION;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
-            v2f vert(appdata v)
+            Varyings vert(Attributes v)
             {
-                v2f o;
-                o.vertex = UnityObjectToClipPos(v.vertex);
+                Varyings o = (Varyings)0;
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+                o.positionWS = TransformObjectToWorld(v.positionOS.xyz);
+                o.positionCS = TransformWorldToHClip(o.positionWS);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-                o.worldPos = mul(unity_ObjectToWorld, v.vertex).xyz;
-                o.worldNormal = UnityObjectToWorldNormal(v.normal);
-                o.viewDir = normalize(_WorldSpaceCameraPos.xyz - o.worldPos);
+                o.normalWS = TransformObjectToWorldNormal(v.normalOS);
+
+                // GetWorldSpaceViewDir rather than a hand-rolled camera subtraction: under
+                // instanced stereo each eye has its own camera position, and the built-in
+                // _WorldSpaceCameraPos this used to read is only correct for one of them.
+                o.viewDirWS = GetWorldSpaceViewDir(o.positionWS);
+
                 return o;
             }
 
-            fixed4 frag(v2f i) : SV_Target
+            half4 frag(Varyings i) : SV_Target
             {
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
                 float2 uv = i.uv;
 
                 // 使用 RD 的 V 通道作为显示值
-                float v = tex2D(_MainTex, uv).g;
+                float v = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, uv).g;
 
                 // 稍微增强对比，让细节更接近参考图
                 float value = pow(saturate(v * _ValueGain), _ValuePower);
@@ -131,20 +177,22 @@ Shader "RDSystem/RDDisplayInk"
                 col = lerp(col, _CoreColor.rgb, core);
 
                 // Fresnel 让边缘更像球面材质
-                float3 N = normalize(i.worldNormal);
-                float3 V = normalize(i.viewDir);
+                float3 N = normalize(i.normalWS);
+                float3 V = normalize(i.viewDirWS);
                 float fresnel = pow(1.0 - saturate(dot(N, V)), _FresnelPower);
                 col += _FresnelColor.rgb * fresnel * _FresnelIntensity;
 
                 // 一个简单假高光
-                float3 L = normalize(_WorldSpaceLightPos0.xyz);
+                float3 L = normalize(_MainLightPosition.xyz);
                 float3 H = normalize(L + V);
                 float spec = pow(saturate(dot(N, H)), _SpecPower) * _SpecIntensity;
                 col += _SpecColor.rgb * spec * 0.15;
 
-                return float4(saturate(col), 1);
+                return half4(saturate(col), 1);
             }
             ENDHLSL
         }
     }
+
+    FallBack Off
 }

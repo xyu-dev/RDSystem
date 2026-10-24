@@ -69,16 +69,23 @@ public static class RDExhibitionV2Setup
     private const float PulseBpmActive = 66f;
     private const float PulseBpmResting = 44f;
 
+    // The surface terms are copied too, so the generated material IS the smooth ink display
+    // rather than an approximation of it. RD/Display/Use Smooth Ink used to be the only way to
+    // get the fresnel rim and the fake specular, and it bought them by swapping in a
+    // built-in-pipeline shader that renders to the left eye alone in the headset.
     private static readonly string[] CopiedInkFloats =
     {
         "_CoreThreshold", "_CoreSoftness",
         "_HaloThreshold", "_HaloSoftness", "_HaloIntensity",
-        "_ValuePower", "_ValueGain"
+        "_ValuePower", "_ValueGain",
+        "_FresnelPower", "_FresnelIntensity",
+        "_SpecPower", "_SpecIntensity"
     };
 
     private static readonly string[] CopiedInkColors =
     {
-        "_BackgroundColor", "_CoreColor", "_HaloColor"
+        "_BackgroundColor", "_CoreColor", "_HaloColor",
+        "_FresnelColor", "_SpecColor"
     };
 
     [MenuItem("RD/Set Up Exhibition V2 Scene", priority = 2)]
@@ -148,6 +155,10 @@ public static class RDExhibitionV2Setup
 
         cameraGo.AddComponent<AudioListener>();
         cameraGo.AddComponent<CameraController>();
+
+        // The headset writes the camera. The mouse-look above stands itself down whenever a
+        // display is presenting, so the two never write the same rotation in the same frame.
+        RDXRRigSetup.AttachHeadTracking(cameraGo);
 
         // The drift goes on the RIG, not the camera: mouse-look writes the camera's local
         // rotation and the HMD writes its local pose, so a drift on the same transform would be

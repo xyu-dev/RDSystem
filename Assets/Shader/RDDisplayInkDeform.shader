@@ -55,6 +55,16 @@ Shader "RDSystem/RDDisplayInkDeform"
         _Levels("Colour Levels", Range(2, 64)) = 12
         _EdgeSoftness("Cell Edge Softness (pixels)", Range(0, 3)) = 1
 
+        [Header(Surface)]
+        _FresnelColor("Fresnel Color", Color) = (0.85, 0.93, 1.0, 1)
+        _FresnelPower("Fresnel Power", Range(0.1,8)) = 3.0
+        _FresnelIntensity("Fresnel Intensity", Range(0,2)) = 0.2
+
+        [Header(Specular Fake)]
+        _SpecColor("Spec Color", Color) = (1,1,1,1)
+        _SpecPower("Spec Power", Range(1,128)) = 36
+        _SpecIntensity("Spec Intensity", Range(0,2)) = 0.18
+
         [Header(Debug)]
         _ShowDepth("Show Depth Field", Range(0,1)) = 0
     }
@@ -78,6 +88,10 @@ Shader "RDSystem/RDDisplayInkDeform"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+
+            // XR single-pass instanced: both eyes come out of one draw, and without these the
+            // shader only ever writes eye 0 - the right lens stays black.
+            #pragma multi_compile_instancing
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
@@ -118,6 +132,14 @@ Shader "RDSystem/RDDisplayInkDeform"
                 float _Levels;
                 float _EdgeSoftness;
 
+                float4 _FresnelColor;
+                float _FresnelPower;
+                float _FresnelIntensity;
+
+                float4 _SpecColor;
+                float _SpecPower;
+                float _SpecIntensity;
+
                 float _ShowDepth;
             CBUFFER_END
 
@@ -128,6 +150,8 @@ Shader "RDSystem/RDDisplayInkDeform"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 uv         : TEXCOORD0;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
@@ -136,6 +160,11 @@ Shader "RDSystem/RDDisplayInkDeform"
                 float2 uv         : TEXCOORD0;
                 float3 dirOS      : TEXCOORD1;
                 float  depth      : TEXCOORD2;
+                float3 normalWS   : TEXCOORD3;
+                float3 viewDirWS  : TEXCOORD4;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             float2 SphereDirToUV(float3 dir)
@@ -151,7 +180,11 @@ Shader "RDSystem/RDDisplayInkDeform"
 
             Varyings vert(Attributes v)
             {
-                Varyings o;
+                Varyings o = (Varyings)0;
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
                 // The mesh UV is already equirectangular, and it is the same UV hit.textureCoord
                 // returns, so the dent lands exactly where the gaze was.
@@ -167,6 +200,14 @@ Shader "RDSystem/RDDisplayInkDeform"
                 o.dirOS = normalize(v.positionOS.xyz);
                 o.uv = v.uv;
                 o.depth = depth;
+
+                // For the fresnel rim and the fake specular carried over from the smooth ink
+                // display. Taken from the DISPLACED position, because that is the surface the
+                // viewer is actually looking at - using the undisplaced one would leave the rim
+                // sitting where the sphere used to be while the dent moved out from under it.
+                float3 positionWS = TransformObjectToWorld(displaced);
+                o.normalWS = TransformObjectToWorldNormal(v.normalOS);
+                o.viewDirWS = GetWorldSpaceViewDir(positionWS);
 
                 return o;
             }
@@ -281,6 +322,9 @@ Shader "RDSystem/RDDisplayInkDeform"
 
             half4 frag(Varyings i) : SV_Target
             {
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
                 if (_ShowDepth > 0.5)
                 {
                     float d = SAMPLE_TEXTURE2D(_DepthTex, sampler_DepthTex, i.uv).r;
@@ -361,6 +405,22 @@ Shader "RDSystem/RDDisplayInkDeform"
                 // a colour outside the ramp is allowed, because here it is a deliberate choice
                 // rather than a by-product of darkening.
                 col = lerp(col, _DepthBloomColor.rgb, depth * _DepthBloom);
+
+                // The two terms that made the smooth ink display read as a sphere rather than a
+                // projection: a fresnel rim, and one fake specular. Carried over verbatim so
+                // RD/Display/Use Smooth Ink is no longer the only way to get that surface - it
+                // swapped in a built-in-pipeline shader, which rendered to the left eye alone.
+                // Set either intensity to zero on the material to switch its term off.
+                float3 N = normalize(i.normalWS);
+                float3 V = normalize(i.viewDirWS);
+
+                float fresnel = pow(1.0 - saturate(dot(N, V)), _FresnelPower);
+                col += _FresnelColor.rgb * fresnel * _FresnelIntensity;
+
+                float3 L = normalize(_MainLightPosition.xyz);
+                float3 H = normalize(L + V);
+                float spec = pow(saturate(dot(N, H)), _SpecPower) * _SpecIntensity;
+                col += _SpecColor.rgb * spec * 0.15;
 
                 return half4(saturate(col), 1.0);
             }

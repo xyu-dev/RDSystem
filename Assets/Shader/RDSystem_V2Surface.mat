@@ -43,6 +43,8 @@ Material:
     - _DepthRelief: 0.8
     - _DepthValueShift: 0.1
     - _EdgeSoftness: 1
+    - _FresnelIntensity: 0.2
+    - _FresnelPower: 3
     - _HaloIntensity: 1.15
     - _HaloSoftness: 0.16
     - _HaloThreshold: 0.14
@@ -51,12 +53,16 @@ Material:
     - _Pixelate: 0
     - _ReliefMetres: 2.5
     - _ShowDepth: 0
+    - _SpecIntensity: 0.18
+    - _SpecPower: 36
     - _ValueGain: 1.4
     - _ValuePower: 1.3
     m_Colors:
     - _BackgroundColor: {r: 0.96999997, g: 0.96999997, b: 0.96999997, a: 1}
     - _CoreColor: {r: 0.01, g: 0.03, b: 0.089999996, a: 0.003921569}
     - _DepthBloomColor: {r: 0.62, g: 0.8, b: 1, a: 1}
+    - _FresnelColor: {r: 0.85, g: 0.93, b: 1, a: 1}
     - _HaloColor: {r: 0.45, g: 0.7, b: 1, a: 1}
+    - _SpecColor: {r: 1, g: 1, b: 1, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

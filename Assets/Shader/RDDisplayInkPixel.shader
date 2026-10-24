@@ -72,6 +72,10 @@ Shader "RDSystem/RDDisplayInkPixel"
             #pragma vertex vert
             #pragma fragment frag
 
+            // XR single-pass instanced: both eyes come out of one draw, and without these the
+            // shader only ever writes eye 0 - the right lens stays black.
+            #pragma multi_compile_instancing
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             TEXTURE2D(_MainTex);
@@ -107,17 +111,27 @@ Shader "RDSystem/RDDisplayInkPixel"
             {
                 float4 positionOS : POSITION;
                 float2 uv         : TEXCOORD0;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
                 float2 uv         : TEXCOORD0;
+
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+                UNITY_VERTEX_OUTPUT_STEREO
             };
 
             Varyings vert(Attributes v)
             {
-                Varyings o;
+                Varyings o = (Varyings)0;
+
+                UNITY_SETUP_INSTANCE_ID(v);
+                UNITY_TRANSFER_INSTANCE_ID(v, o);
+                UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
                 o.positionCS = TransformObjectToHClip(v.positionOS.xyz);
                 o.uv = TRANSFORM_TEX(v.uv, _MainTex);
                 return o;
@@ -227,6 +241,9 @@ Shader "RDSystem/RDDisplayInkPixel"
 
             half4 frag(Varyings i) : SV_Target
             {
+                UNITY_SETUP_INSTANCE_ID(i);
+                UNITY_SETUP_STEREO_EYE_INDEX_POST_VERTEX(i);
+
                 float cells = max(2.0, floor(_CellsPerFace));
 
                 float3 d = SphereUVToDir(i.uv);

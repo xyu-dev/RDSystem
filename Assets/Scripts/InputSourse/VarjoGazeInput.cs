@@ -5,12 +5,31 @@ using UnityEngine.XR;
 using Varjo.XR;
 
 public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteractionUVSource,
-    IInteractionHealthSource
+    IInteractionHealthSource, IInteractionCalibrationSource
 {
     public event System.Action<Vector2> OnInteractionStart;
     public event System.Action<Vector2> OnInteractionUpdate;
     public event System.Action<float> OnInteractionEnd;
     public event System.Action<float> OnDurationTick;
+
+    [Header("Calibration")]
+    [Tooltip("Fast is the two-dot routine: about five seconds, which is as long as a stranger " +
+             "will stand still. OneDot is quicker and coarser.")]
+    [SerializeField] private VarjoEyeTracking.GazeCalibrationMode calibrationMode =
+        VarjoEyeTracking.GazeCalibrationMode.Fast;
+
+    [Tooltip("Print to the console whenever the tracking verdict changes. The cheapest way to " +
+             "see which gate is refusing when the router will not hand over.")]
+    [SerializeField] private bool logStatusChanges = true;
+
+    [Tooltip("How long gaze may read Invalid before the source counts as lost. Must comfortably " +
+             "exceed a blink, or the router never finishes its switch-back delay; must stay well " +
+             "under it, or a headset taken off keeps the room running on nothing.")]
+    [SerializeField] private float gazeDropoutGrace = 0.6f;
+
+    [Tooltip("Gaze sample rate requested at startup. MaximumSupported is what the headset can do.")]
+    [SerializeField] private VarjoEyeTracking.GazeOutputFrequency outputFrequency =
+        VarjoEyeTracking.GazeOutputFrequency.MaximumSupported;
 
     [Header("Gaze Source")]
     [SerializeField] private GazeDataSource gazeDataSource = GazeDataSource.GazeAPI;
@@ -56,7 +75,36 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
         }
     }
 
+    private string lastLoggedStatus;
+    private float lastValidGazeTime = -999f;
+
+    /// <summary>
+    /// Wraps the real check so the reason reaches the console on its own.
+    ///
+    /// It is logged from here rather than from Update because the router disables this component
+    /// the instant it falls back to the mouse - Update stops running, and the one fact anyone
+    /// needs (which gate is failing) stops being reported at exactly the moment it matters. The
+    /// router polls this every frame either way, so the transition is always caught.
+    /// </summary>
     private bool EvaluateTracking(out string status)
+    {
+        bool ok = EvaluateTrackingCore(out status);
+
+        if (logStatusChanges)
+        {
+            string line = ok ? "gaze healthy" : status;
+
+            if (line != lastLoggedStatus)
+            {
+                lastLoggedStatus = line;
+                Debug.Log("[VarjoGazeInput] " + line);
+            }
+        }
+
+        return ok;
+    }
+
+    private bool EvaluateTrackingCore(out string status)
     {
         if (xrCamera == null && Camera.main == null)
         {
@@ -66,6 +114,18 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
 
         try
         {
+            if (!VarjoEyeTracking.IsGazeAvailable())
+            {
+                status = "no eye tracker on this headset";
+                return false;
+            }
+
+            if (VarjoEyeTracking.IsGazeCalibrating())
+            {
+                status = "calibrating - hold still";
+                return false;
+            }
+
             if (!VarjoEyeTracking.IsGazeAllowed())
             {
                 status = "gaze not allowed (enable eye tracking in Varjo Base)";
@@ -78,10 +138,28 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
                 return false;
             }
 
+            // A blink must not count as "lost".
+            //
+            // The router only hands the room back after switchBackDelay seconds of CONTINUOUS
+            // health, and it resets that counter on any unhealthy frame. Gaze goes Invalid every
+            // time the visitor blinks - roughly every three seconds, for a couple of hundred
+            // milliseconds. Failing instantly on Invalid therefore resets the router's counter
+            // faster than it can ever fill, and the hand-over never happens no matter how well
+            // the eye tracker is working. That is the whole bug: the gaze was fine, the health
+            // check was not.
+            //
+            // Update() already forgives the same dropouts for the same reason; see LoseGaze.
             if (VarjoEyeTracking.GetGaze().status == VarjoEyeTracking.GazeStatus.Invalid)
             {
-                status = "gaze invalid (headset not worn or eyes not found)";
-                return false;
+                if (Time.unscaledTime - lastValidGazeTime > gazeDropoutGrace)
+                {
+                    status = "gaze invalid (headset not worn or eyes not found)";
+                    return false;
+                }
+            }
+            else
+            {
+                lastValidGazeTime = Time.unscaledTime;
             }
         }
         catch (System.Exception e)
@@ -94,6 +172,50 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
 
         status = "";
         return true;
+    }
+
+    // ------------------------------------------------------------ calibration
+
+    public bool CanCalibrate => true;
+
+    /// <summary>
+    /// Starts Varjo's own calibration routine for whoever is wearing the headset now.
+    ///
+    /// Nothing in the piece ever called this, which is why gaze can look permanently dead:
+    /// IsGazeCalibrated() stays false until a calibration has actually run, the router sees an
+    /// unhealthy preferred source, and it hands the room to the mouse - silently, forever.
+    /// </summary>
+    public bool RequestCalibration()
+    {
+        try
+        {
+            if (!VarjoEyeTracking.IsGazeAvailable())
+            {
+                Debug.LogWarning("[VarjoGazeInput] No eye tracker available; nothing to calibrate.");
+                return false;
+            }
+
+            if (!VarjoEyeTracking.IsGazeAllowed())
+            {
+                Debug.LogWarning("[VarjoGazeInput] Eye tracking is not allowed. Enable it in " +
+                                 "Varjo Base, then request calibration again.");
+                return false;
+            }
+
+            bool requested = VarjoEyeTracking.RequestGazeCalibration(calibrationMode);
+
+            Debug.Log(requested
+                ? "[VarjoGazeInput] Calibration requested (" + calibrationMode + "). Follow the dots."
+                : "[VarjoGazeInput] Varjo refused the calibration request.");
+
+            return requested;
+        }
+        catch (System.Exception e)
+        {
+            Debug.LogWarning("[VarjoGazeInput] Calibration unavailable (" + e.GetType().Name +
+                             "). Is the headset connected and the Varjo loader active?");
+            return false;
+        }
     }
 
     private readonly List<InputDevice> devices = new List<InputDevice>();
@@ -119,6 +241,20 @@ public class VarjoGazeInput : MonoBehaviour, IInteractionSignalSource, IInteract
     {
         if (xrCamera == null)
             xrCamera = Camera.main;
+
+        // Asking for the fastest the headset will give: the signal this piece reads - dwell,
+        // saccades, returns - is made of small fast movements, and at 100 Hz the short ones are
+        // simply not in the data. Wrapped because this throws outright when no Varjo runtime is
+        // loaded, which is every time anyone opens the scene on a desk.
+        try
+        {
+            VarjoEyeTracking.SetGazeOutputFrequency(outputFrequency);
+        }
+        catch (System.Exception e)
+        {
+            Debug.Log("[VarjoGazeInput] Gaze output frequency not set (" + e.GetType().Name +
+                      "). Normal with no headset attached.");
+        }
     }
 
     private void Update()
