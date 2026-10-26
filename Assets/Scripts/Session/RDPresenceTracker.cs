@@ -47,8 +47,34 @@ public class RDPresenceTracker : MonoBehaviour
     [SerializeField] private PresenceState debugState = PresenceState.Empty;
     [SerializeField] private float debugSessionLength;
 
+    [Tooltip("Seconds of this session actually spent looking, as opposed to elapsed. This is the " +
+             "number that means anything about a visit.")]
+    [SerializeField] private float debugAttendedSeconds;
+
     public PresenceState State => debugState;
     public float CurrentSessionLength => debugSessionLength;
+
+    /// <summary>
+    /// Seconds of the current session spent in contact, not elapsed.
+    ///
+    /// CurrentSessionLength is wall clock from the moment the session opened, and the session
+    /// stays open through 25 seconds of absence - so it keeps counting while the visitor is
+    /// blinking, adjusting the headset, being recalibrated or standing still doing nothing. For
+    /// "how long did they look at it", that number is always too large and sometimes wildly so.
+    /// </summary>
+    public float AttendedSeconds => debugAttendedSeconds;
+
+    /// <summary>Attended seconds of the session that just ended.</summary>
+    public float LastAttendedSeconds { get; private set; }
+
+    /// <summary>
+    /// How long the session that just ended ran, in seconds.
+    ///
+    /// Needed because CloseSession zeroes the running length BEFORE it raises onSessionEnd, so
+    /// anything listening for the end of a visit - the receipt, a log - reads zero if it asks
+    /// for the current one.
+    /// </summary>
+    public float LastSessionLength { get; private set; }
     public string StatusLine { get; private set; } = "";
 
     private IInteractionSignalSource signalSource;
@@ -86,6 +112,8 @@ public class RDPresenceTracker : MonoBehaviour
         {
             contactTimer += dt;
             absenceTimer = 0f;
+
+            if (sessionOpen) debugAttendedSeconds += dt;
 
             if (longTermMemory != null)
                 longTermMemory.AccumulateGaze(dt);
@@ -151,6 +179,9 @@ public class RDPresenceTracker : MonoBehaviour
         sessionOpen = true;
         debugSessionLength = contactTimer;
 
+        // The contact that opened the session was real looking, so it counts.
+        debugAttendedSeconds = contactTimer;
+
         if (longTermMemory != null)
             longTermMemory.RegisterVisitor();
 
@@ -159,8 +190,12 @@ public class RDPresenceTracker : MonoBehaviour
 
     private void CloseSession()
     {
+        LastSessionLength = debugSessionLength;
+        LastAttendedSeconds = debugAttendedSeconds;
+
         sessionOpen = false;
         debugSessionLength = 0f;
+        debugAttendedSeconds = 0f;
 
         if (resetShortTermState && stateLayer != null)
             stateLayer.ResetShortTerm();
