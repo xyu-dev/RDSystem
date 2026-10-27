@@ -1,4 +1,6 @@
 using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.Rendering.Universal;
 
 /// <summary>
 /// The second screen: the room seen from outside, slowly turning, for the people who are not
@@ -29,6 +31,9 @@ public class RDMonitorView : MonoBehaviour
              "sideways and the poles stay where they are.")]
     [SerializeField] private Vector3 spinAxis = Vector3.up;
 
+    /// <summary>The sphere the monitor camera looks at. The receipt frames it from its own angle.</summary>
+    public Transform Ball => ball;
+
     [Header("Display")]
     [Tooltip("Which physical display. 1 is the second monitor; the headset takes display 0.")]
     [Range(0, 7)] [SerializeField] private int targetDisplay = 1;
@@ -36,10 +41,35 @@ public class RDMonitorView : MonoBehaviour
     [Tooltip("Activate the second display on start. Unity leaves extra displays off until asked.")]
     [SerializeField] private bool activateDisplay = true;
 
+    [Tooltip("In a BUILD, give the ball the main window and send the room to the headset only. " +
+             "On a one screen machine this is the whole layout: the visitor sees the room " +
+             "through the lenses, everyone else sees the ball on the monitor, and neither is a " +
+             "mirror of the other. Unity would otherwise fill the window with a copy of what " +
+             "the headset is showing, which is the least interesting of the two views and the " +
+             "one the public cannot make sense of. No effect in the Editor, where the Game " +
+             "view belongs to whoever is working.")]
+    [SerializeField] private bool takeOverMainWindow = true;
+
     [Header("Cost")]
     [Tooltip("Render every Nth frame. An observer view does not need 90 Hz, and the headset's " +
              "frame budget is the one that cannot be compromised. 3 gives about 30 fps at 90.")]
     [Range(1, 6)] [SerializeField] private int renderEveryNthFrame = 3;
+
+#if UNITY_EDITOR
+    [Header("Editor Preview")]
+    [Tooltip("Render the monitor view into a texture the RD Monitor window can draw. The Editor " +
+             "reports exactly one display however many screens are attached, so Display 2 is not " +
+             "reachable from here at all - this is the only way to see this camera while making " +
+             "the piece. Has no effect in a build.")]
+    [SerializeField] private bool previewInEditorWindow = true;
+
+    [SerializeField] private Vector2Int previewSize = new Vector2Int(1280, 720);
+
+    private RenderTexture previewTexture;
+
+    /// <summary>The live monitor image. Null outside Play mode. Read by RDMonitorWindow.</summary>
+    public static RenderTexture EditorPreview { get; private set; }
+#endif
 
     private Camera monitorCamera;
     private int frameCounter;
@@ -52,7 +82,21 @@ public class RDMonitorView : MonoBehaviour
 
         // Mono, and not an XR camera. Without this the second camera is drawn into the headset
         // as a third eye, which looks exactly as bad as it sounds.
-        monitorCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        //
+        // Camera.stereoTargetEye is the built-in renderer's control and URP warns the moment you
+        // touch it, so under a scriptable pipeline the same thing is said through the camera's
+        // URP data instead. Both paths are kept: the warning was noise, but the intent behind it
+        // is not optional.
+        if (GraphicsSettings.currentRenderPipeline == null)
+        {
+            monitorCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        }
+        else
+        {
+            UniversalAdditionalCameraData data = monitorCamera.GetUniversalAdditionalCameraData();
+            if (data != null) data.allowXRRendering = false;
+        }
+
         monitorCamera.targetDisplay = targetDisplay;
 
         // Off until Update turns it on for the frames it wants.
@@ -68,6 +112,52 @@ public class RDMonitorView : MonoBehaviour
 
     private void Start()
     {
+#if UNITY_EDITOR
+        // Display.displays.Length is ALWAYS 1 in the Editor, however many screens are plugged in
+        // - extra displays only resolve in a built player. Taking the branch below here would
+        // therefore switch the monitor view off every single time the piece is run from the
+        // Editor, which is when it most needs looking at, and the warning would blame the cable.
+        //
+        // So render into a texture instead, and let RDMonitorWindow draw it: RD > Monitor Window.
+        available = true;
+
+        if (previewInEditorWindow)
+        {
+            previewTexture = new RenderTexture(previewSize.x, previewSize.y, 24)
+            {
+                name = "RD Monitor Preview"
+            };
+
+            previewTexture.Create();
+
+            // targetTexture rather than a manual Render() call: a camera with a target texture
+            // is rendered by URP inside its own loop, at its own time, which is the whole point
+            // of the throttle below. Calling Render() by hand is what tears the frame apart.
+            monitorCamera.targetTexture = previewTexture;
+            EditorPreview = previewTexture;
+        }
+
+        return;
+#else
+        if (takeOverMainWindow)
+        {
+            // The headset mirror is what normally owns the player window. Switching it off frees
+            // display 0 for a camera of our own - this one, which already has allowXRRendering
+            // false and so is not drawn into the headset.
+            UnityEngine.XR.XRSettings.showDeviceView = false;
+
+            targetDisplay = 0;
+            monitorCamera.targetDisplay = 0;
+
+            // It owns the window now, so it has to draw every frame. Skipping two in three was
+            // a saving worth making for a secondary screen; on the main one it leaves the
+            // window holding a stale or empty back buffer.
+            renderEveryNthFrame = 1;
+
+            available = true;
+            return;
+        }
+
         if (targetDisplay > 0 && Display.displays.Length <= targetDisplay)
         {
             // Rendering to a display that is not there is the other half of the attachment
@@ -86,10 +176,22 @@ public class RDMonitorView : MonoBehaviour
 
         if (activateDisplay && targetDisplay > 0)
             Display.displays[targetDisplay].Activate();
+#endif
     }
 
     private void Update()
     {
+#if UNITY_EDITOR
+        // A lost surface comes back empty rather than throwing, so the window would show "no
+        // preview" for the rest of the session. Recreating costs one check a frame.
+        if (previewTexture != null && !previewTexture.IsCreated())
+        {
+            previewTexture.Create();
+            monitorCamera.targetTexture = previewTexture;
+            EditorPreview = previewTexture;
+        }
+#endif
+
         if (ball != null && secondsPerRevolution > 0.01f)
         {
             angle += 360f / secondsPerRevolution * Time.deltaTime;
@@ -110,4 +212,23 @@ public class RDMonitorView : MonoBehaviour
 
         monitorCamera.enabled = frameCounter == 0;
     }
+
+#if UNITY_EDITOR
+    private void OnDestroy()
+    {
+        if (previewTexture == null) return;
+
+        // Released by hand: a RenderTexture created in code is not garbage collected while the
+        // camera still points at it, and leaving one per play session behind is how an Editor
+        // ends up out of video memory by the afternoon.
+        if (monitorCamera != null)
+            monitorCamera.targetTexture = null;
+
+        EditorPreview = null;
+
+        previewTexture.Release();
+        DestroyImmediate(previewTexture);
+        previewTexture = null;
+    }
+#endif
 }

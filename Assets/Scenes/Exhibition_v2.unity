@@ -357,6 +357,7 @@ GameObject:
   m_Component:
   - component: {fileID: 581165834}
   - component: {fileID: 581165835}
+  - component: {fileID: 581165836}
   m_Layer: 0
   m_Name: Camera Rig
   m_TagString: Untagged
@@ -401,6 +402,38 @@ MonoBehaviour:
   warmupSeconds: 8
   driftEnabled: 1
   debugSpeed: 0
+--- !u!114 &581165836
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 581165833}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5fe6b0d60107ea540b74c9464446e4c3, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RDBoundary
+  head: {fileID: 0}
+  centre: {fileID: 0}
+  roomSurface: {fileID: 0}
+  headsetCamera: {fileID: 0}
+  radius: 1.1
+  hysteresis: 0.25
+  horizontalOnly: 1
+  warningEnglish: Outside the tracking area
+  warningGerman: "Au\xDFerhalb des Tracking-Bereichs"
+  instructionEnglish: Please step back
+  instructionGerman: "Bitte zur\xFCcktreten"
+  warningDistance: 2
+  warningPixelSize: 16
+  warningSize: 0.06
+  warningCopies: 3
+  warningSpin: 28
+  warningColor: {r: 1, g: 0.72, b: 0.4, a: 1}
+  pauseWhileOutside: []
+  debugOutside: 0
+  debugDistance: 0
 --- !u!1 &763248333
 GameObject:
   m_ObjectHideFlags: 0
@@ -451,7 +484,10 @@ MonoBehaviour:
   spinAxis: {x: 0, y: 1, z: 0}
   targetDisplay: 1
   activateDisplay: 1
+  takeOverMainWindow: 1
   renderEveryNthFrame: 3
+  previewInEditorWindow: 1
+  previewSize: {x: 1280, y: 720}
 --- !u!20 &763248336
 Camera:
   m_ObjectHideFlags: 0
@@ -529,6 +565,7 @@ GameObject:
   - component: {fileID: 1006406745}
   - component: {fileID: 1006406744}
   - component: {fileID: 1006406743}
+  - component: {fileID: 1006406750}
   m_Layer: 0
   m_Name: Surface
   m_TagString: Untagged
@@ -707,6 +744,7 @@ MonoBehaviour:
   worn: 0
   toggleKey: 22
   simulate: 0
+  useHeadsetSensor: 1
   debugWorn: 0
   debugNoGaze: 0
 --- !u!114 &1006406737
@@ -769,7 +807,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 696c4c5da94b21f4ca1c4ab1bf0af904, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::VarjoGazeInput
-  calibrationMode: 0
+  gazeCalibrationMode: 0
   logStatusChanges: 1
   gazeDropoutGrace: 0.6
   outputFrequency: 0
@@ -781,6 +819,9 @@ MonoBehaviour:
   gazeRadius: 0.01
   maxDistance: 200
   requireThisObject: 1
+  autoRecalibrateWhenLost: 0
+  recalibrateAfterLostSeconds: 15
+  recalibrateCooldownSeconds: 60
   eyeJumpDistanceThreshold: 0.18
   headMotionScale: 1
   <IsInteracting>k__BackingField: 0
@@ -824,6 +865,7 @@ MonoBehaviour:
       m_Calls: []
   debugState: 0
   debugSessionLength: 0
+  debugAttendedSeconds: 0
 --- !u!114 &1006406741
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -849,6 +891,7 @@ MonoBehaviour:
   allowFlipVertical: 1
   allowFlipBoth: 1
   directionSmoothSpeed: 16
+  directionDamping: 5
   director: {fileID: 1006406732}
   strategyRadiusRange: {x: 0.12, y: 0.55}
   strategyMaxChaseChance: 0.6
@@ -1045,6 +1088,39 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1006406750
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1006406731}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1dc060337bcafbd458d15bb615a95bef, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RDReceipt
+  presenceTracker: {fileID: 0}
+  sourceTexture: {fileID: 0}
+  printBallView: 1
+  ballCamera: {fileID: 0}
+  sampleInterval: 4
+  gazeTexture: {fileID: 0}
+  trackingSourceBehaviour: {fileID: 0}
+  newVisitorGap: 8
+  headset: {fileID: 0}
+  receiptWidth: 384
+  clipPixels: {x: 176, y: 176}
+  margin: 16
+  inkThreshold: 0.55
+  clipAttempts: 6
+  targetBlobPixels: 10
+  invert: 0
+  outputFolder: 
+  printCommand: powershell.exe
+  printArguments: -NoProfile -ExecutionPolicy Bypass -File "C:\Users\admin\Exhibition_xinyun\RDSystem\Tools\print-receipt.ps1"
+    -File "{file}"
+  minimumSeconds: 30
 --- !u!1 &1242131793
 GameObject:
   m_ObjectHideFlags: 0

@@ -173,6 +173,14 @@ public static class RDExhibitionV2Setup
 
         GameObject surface = BuildSurface(display);
 
+        // The safe area. Centred on the rig rather than on world zero, because the rig is what
+        // the piece is composed around.
+        RDBoundary boundary = rig.AddComponent<RDBoundary>();
+        SetObject(boundary, "head", cameraGo.transform);
+        SetObject(boundary, "centre", rig.transform);
+        SetObject(boundary, "headsetCamera", camera);
+        SetObject(boundary, "roomSurface", surface.GetComponent<Renderer>());
+
         // ---- simulation ---------------------------------------------------
 
         global::RDSystem.RDSystemUpdater simUpdater = BuildUpdater(crt, "RDSystem", 4);
@@ -241,6 +249,13 @@ public static class RDExhibitionV2Setup
         SetObject(presence, "signalSourceBehaviour", headset);
         SetObject(presence, "stateLayer", stateLayer);
         SetObject(presence, "longTermMemory", memory);
+
+        // The receipt. Prints nothing until Print Command is filled in - until then it just
+        // writes the PNG, which is how you check the composition before involving paper.
+        RDReceipt receipt = surface.AddComponent<RDReceipt>();
+        SetObject(receipt, "presenceTracker", presence);
+        SetObject(receipt, "sourceTexture", crt);
+        SetObject(receipt, "headset", headset);
 
         // ---- the greedy algorithm -----------------------------------------
 
@@ -464,6 +479,15 @@ public static class RDExhibitionV2Setup
         material.SetFloat("_Pixelate", 0f);
         material.SetFloat("_DeformMetres", 0f);
         material.SetFloat("_ReliefMetres", 0.25f);
+
+        // Only the monitor ball grows tentacles. The room the visitor stands inside keeps
+        // _TentacleLength at the shader default of 0, so one shader serves both and the surface
+        // an arm's length from someone's face stays smooth.
+        material.SetFloat("_TentacleLength", 0.16f);
+        material.SetFloat("_TentacleDensity", 13f);
+        material.SetFloat("_TentacleSharpness", 10f);
+        material.SetFloat("_TentacleSpeed", 0.8f);
+        material.SetFloat("_TentacleSway", 0.12f);
         material.SetFloat("_ValueGain", AuthoredGain);
         material.SetFloat("_DepthRelief", AuthoredRelief);
         material.SetFloat("_DepthBloom", AuthoredBloom);

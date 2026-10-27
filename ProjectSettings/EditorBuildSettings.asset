@@ -6,11 +6,8 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Scenes/Exhibition.unity
-    guid: d8f167e0d3371494d873e3a357f0472a
-  - enabled: 1
-    path: Assets/Scenes/MouseInputTest.unity
-    guid: ff5702dfe30c34fa2a680f20ba104712
+    path: Assets/Scenes/Exhibition_v2.unity
+    guid: 8489a0835b9e1124f80a58f863a69c62
   m_configObjects:
     Varjo.XR.Settings: {fileID: 11400000, guid: a6153f99379b390419cc9b21e6112ada, type: 2}
     com.unity.xr.arfoundation.simulation_settings: {fileID: 11400000, guid: 3d3117c631d7b464d9ecf31ab6d8a841, type: 2}
