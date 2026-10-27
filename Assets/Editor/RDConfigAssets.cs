@@ -33,10 +33,27 @@ internal static class RDConfigAssets
 
         if (System.IO.File.Exists(path))
         {
-            // A file that will not load as T is broken, not absent. Replacing it is the only
-            // repair: the serialized data is fine, but nothing can read it without the binding.
+            // A file that will not load as T is broken, not absent. Repair the binding IN PLACE
+            // before considering replacement: the serialized data is fine, and deleting the
+            // asset mints a new GUID, which silently breaks every scene reference pointing at
+            // the old one. That is how the catalogue came back a second time - repaired on disk,
+            // then overwritten when Unity re-serialized the broken copy it still held.
+            if (TryRepairScriptBinding<T>(path))
+            {
+                T repaired = AssetDatabase.LoadAssetAtPath<T>(path);
+
+                if (repaired != null)
+                {
+                    Debug.Log("[RDConfigAssets] Repaired the script binding on " + path +
+                              "; its GUID and data are intact.");
+
+                    return repaired;
+                }
+            }
+
             Debug.LogWarning("[RDConfigAssets] " + path + " exists but will not load as " +
-                             typeof(T).Name + " - its script binding is broken. Replacing it.");
+                             typeof(T).Name + " and could not be repaired. Replacing it - any " +
+                             "scene reference to it will need reassigning.");
 
             AssetDatabase.DeleteAsset(path);
         }
@@ -72,6 +89,60 @@ internal static class RDConfigAssets
         }
 
         return verified;
+    }
+
+    /// <summary>
+    /// Writes the missing script reference back onto an asset that lost it, keeping its GUID.
+    ///
+    /// A ScriptableObject saved with "m_Script: {fileID: 0}" still loads as an object - just not
+    /// as its own class - so SerializedObject can reach the field and put the MonoScript back.
+    /// That is the whole repair, and it is worth preferring over delete-and-recreate for one
+    /// reason: the GUID survives, so every scene already pointing at this asset keeps working.
+    /// </summary>
+    private static bool TryRepairScriptBinding<T>(string path) where T : ScriptableObject
+    {
+        Object broken = AssetDatabase.LoadMainAssetAtPath(path);
+        if (broken == null) return false;
+
+        SerializedObject data = new SerializedObject(broken);
+        SerializedProperty script = data.FindProperty("m_Script");
+
+        if (script == null) return false;
+
+        T probe = ScriptableObject.CreateInstance<T>();
+        MonoScript mono = MonoScript.FromScriptableObject(probe);
+        Object.DestroyImmediate(probe);
+
+        if (mono == null) return false;
+
+        script.objectReferenceValue = mono;
+        data.ApplyModifiedPropertiesWithoutUndo();
+
+        EditorUtility.SetDirty(broken);
+        AssetDatabase.SaveAssets();
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+
+        return true;
+    }
+
+    /// <summary>
+    /// Repairs the generated configs without rebuilding a scene.
+    ///
+    /// The scene builders call Ensure as a side effect of regenerating everything, which is no
+    /// use once a scene has been tuned by hand. This runs the same check on its own.
+    /// </summary>
+    [MenuItem("RD/Repair Config Assets", priority = 61)]
+    private static void RepairConfigAssets()
+    {
+        const string folder = "Assets/Settings/RD";
+
+        Ensure<RDStrategyCatalogue>(folder, "RDStrategyCatalogue");
+        Ensure<RDMusicConfig>(folder, "RDMusicConfig");
+
+        AssetDatabase.SaveAssets();
+        AssetDatabase.Refresh();
+
+        Debug.Log("[RDConfigAssets] Config assets checked.");
     }
 
     /// <summary>
