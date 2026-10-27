@@ -40,6 +40,12 @@ public class RDController : MonoBehaviour
     [Header("Direction Motion")]
     [SerializeField] private float directionSmoothSpeed = 16f;
 
+    [Tooltip("How hard the ring resists being moved. This is damping on a spring, so it is the " +
+             "number that gives the target weight: low values let it drift past the gaze and " +
+             "settle back, high values drag it. Critical damping is about twice the square root " +
+             "of the smooth speed - below that it overshoots, which is what reads as momentum.")]
+    [SerializeField] private float directionDamping = 5f;
+
     [Header("Greedy Strategy")]
     [Tooltip("Optional. When assigned, the bandit's current strategy scales the ring size and how " +
              "readily the ring evades the gaze.")]
@@ -75,6 +81,7 @@ public class RDController : MonoBehaviour
     private bool chaseFlipVertical = false;
 
     private Vector3 smoothRingDir = Vector3.up;
+    private Vector3 ringVelocity;
     private bool initializedDir = false;
 
     private void Awake()
@@ -168,8 +175,25 @@ public class RDController : MonoBehaviour
         if (currentMode == RingMode.Chase)
             targetDir = BuildChaseDirection(gazeDir);
 
-        float t = 1f - Mathf.Exp(-directionSmoothSpeed * Time.deltaTime);
-        smoothRingDir = Vector3.Slerp(smoothRingDir, targetDir.normalized, t).normalized;
+        // A spring with damping rather than an exponential ease.
+        //
+        // An ease has no memory: it is always a fixed fraction of the way to wherever the gaze
+        // is this frame, so it can change direction instantly and arrives with no weight behind
+        // it. Giving the ring a velocity means it has to be accelerated and then stopped, so it
+        // lags into a movement, carries slightly past a fixation and settles - which is what
+        // makes it feel like something being dragged rather than something being addressed.
+        float dt = Time.deltaTime;
+
+        Vector3 toTarget = Vector3.ProjectOnPlane(targetDir.normalized - smoothRingDir, smoothRingDir);
+
+        ringVelocity += toTarget * (directionSmoothSpeed * dt);
+        ringVelocity -= ringVelocity * Mathf.Min(1f, directionDamping * dt);
+
+        smoothRingDir = (smoothRingDir + ringVelocity * dt).normalized;
+
+        // Kept tangential, or the velocity accumulates a radial component that the normalise
+        // above silently throws away every frame and the ring creeps.
+        ringVelocity = Vector3.ProjectOnPlane(ringVelocity, smoothRingDir);
 
         return smoothRingDir;
     }

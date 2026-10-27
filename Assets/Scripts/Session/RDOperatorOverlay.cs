@@ -37,8 +37,20 @@ public class RDOperatorOverlay : MonoBehaviour
         if (keyboard[toggleKey].wasPressedThisFrame)
             visible = !visible;
 
-        if (keyboard[calibrateKey].wasPressedThisFrame && router != null)
-            router.RequestCalibration();
+        // F2 always says something. A key that silently does nothing is indistinguishable from
+        // a key that is not wired, and the operator is standing next to a visitor waiting.
+        if (keyboard[calibrateKey].wasPressedThisFrame)
+        {
+            if (router == null)
+                Debug.LogError("[RDOperatorOverlay] No router assigned, so F2 cannot reach the " +
+                               "gaze input.");
+            else if (!router.CanCalibrate)
+                Debug.LogError("[RDOperatorOverlay] The preferred input source cannot " +
+                               "calibrate. Check that the router's Preferred Source is the " +
+                               "VarjoGazeInput.");
+            else
+                router.RequestCalibration();
+        }
     }
 
     private void OnGUI()

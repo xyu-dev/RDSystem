@@ -355,6 +355,39 @@ public class RDGreedyDirector : MonoBehaviour
         debugTotalImpressions = record.totalImpressions;
     }
 
+    /// <summary>
+    /// Forgets everything learned, in memory and on disk.
+    ///
+    /// Needed because the values are not just stale when the sessions that produced them were
+    /// broken - they are wrong in a way that cannot be learned out quickly. Epsilon decays with
+    /// impressions, so a run that accumulated thousands of false ones is left barely exploring
+    /// at all: the machine stops trying alternatives precisely when its estimates are worst, and
+    /// sits on whichever strategy happened to win during the noise. Clearing is the only cheap
+    /// way back.
+    /// </summary>
+    public void ResetMemory()
+    {
+        record = new BanditRecord();
+
+        if (catalogue != null) EnsureRecordSize();
+
+        debugTotalImpressions = 0;
+        debugLastReward = 0f;
+
+        try
+        {
+            if (!string.IsNullOrEmpty(savePath) && File.Exists(savePath))
+                File.Delete(savePath);
+        }
+        catch (Exception e)
+        {
+            Debug.LogWarning("[RDGreedyDirector] Could not delete " + savePath + ": " + e.Message);
+        }
+
+        Debug.Log("[RDGreedyDirector] Strategy memory cleared; exploration starts again from " +
+                  "startEpsilon.");
+    }
+
     // ------------------------------------------------------------------ persistence
 
     private void EnsureRecordSize()

@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Varjo.XR.Input;
 
 /// <summary>
 /// Simulates the headset being picked up and put down, so the whole session lifecycle can be
@@ -39,6 +40,11 @@ public class RDHeadsetSimulator : MonoBehaviour,
              "forwards the router unchanged.")]
     [SerializeField] private bool simulate = true;
 
+    [Tooltip("With simulation off, read the headset's own proximity sensor instead of assuming " +
+             "it is always worn. This is what makes taking it off a real event rather than " +
+             "something the piece only infers 25 seconds later from the absence of gaze.")]
+    [SerializeField] private bool useHeadsetSensor = true;
+
     [Header("Read-only")]
     [SerializeField] private bool debugWorn;
     [SerializeField] private float debugNoGaze;
@@ -56,8 +62,38 @@ public class RDHeadsetSimulator : MonoBehaviour,
     /// is one; until then the H key is the sensor.</summary>
     public bool Worn
     {
-        get => !simulate || worn;
+        get => simulate ? worn : (!useHeadsetSensor || sensorWorn);
         set => worn = value;
+    }
+
+    // Cached once a frame. Worn is read several times per frame by everything downstream, and a
+    // device query per read is wasteful; it also keeps the value stable within a frame, so two
+    // readers cannot disagree about whether the headset is on.
+    private bool sensorWorn = true;
+
+    /// <summary>
+    /// The headset's own answer to whether someone is wearing it.
+    ///
+    /// Varjo publishes it as a button on its Input System layout, and the XR subsystem may also
+    /// expose it as a feature usage; both are tried because which one is populated depends on
+    /// the runtime version. When neither answers, the honest default is TRUE - a missing sensor
+    /// must not read as an empty gallery and gate the whole piece off.
+    /// </summary>
+    private static bool ReadUserPresence()
+    {
+        VarjoHMD hmd = InputSystem.GetDevice<VarjoHMD>();
+
+        if (hmd != null && hmd.userPresence != null)
+            return hmd.userPresence.isPressed;
+
+        UnityEngine.XR.InputDevice head =
+            UnityEngine.XR.InputDevices.GetDeviceAtXRNode(UnityEngine.XR.XRNode.Head);
+
+        if (head.isValid &&
+            head.TryGetFeatureValue(UnityEngine.XR.CommonUsages.userPresence, out bool present))
+            return present;
+
+        return true;
     }
 
     private void Awake()
@@ -82,6 +118,9 @@ public class RDHeadsetSimulator : MonoBehaviour,
 
     private void Update()
     {
+        if (!simulate && useHeadsetSensor)
+            sensorWorn = ReadUserPresence();
+
         if (simulate)
         {
             Keyboard keyboard = Keyboard.current;
