@@ -55,6 +55,13 @@ Shader "RDSystem/RDDisplayInkDeform"
         _Levels("Colour Levels", Range(2, 64)) = 12
         _EdgeSoftness("Cell Edge Softness (pixels)", Range(0, 3)) = 1
 
+        [Header(Tentacles (monitor only   length 0 is off))]
+        _TentacleLength("Tentacle Length", Range(0, 1)) = 0
+        _TentacleDensity("Tentacle Density", Range(2, 40)) = 13
+        _TentacleSharpness("Tentacle Sharpness", Range(1, 32)) = 10
+        _TentacleSpeed("Tentacle Speed", Range(0, 4)) = 0.8
+        _TentacleSway("Tentacle Sway", Range(0, 0.5)) = 0.12
+
         [Header(Surface)]
         _FresnelColor("Fresnel Color", Color) = (0.85, 0.93, 1.0, 1)
         _FresnelPower("Fresnel Power", Range(0.1,8)) = 3.0
@@ -132,6 +139,12 @@ Shader "RDSystem/RDDisplayInkDeform"
                 float _Levels;
                 float _EdgeSoftness;
 
+                float _TentacleLength;
+                float _TentacleDensity;
+                float _TentacleSharpness;
+                float _TentacleSpeed;
+                float _TentacleSway;
+
                 float4 _FresnelColor;
                 float _FresnelPower;
                 float _FresnelIntensity;
@@ -178,6 +191,46 @@ Shader "RDSystem/RDDisplayInkDeform"
                 return float2(phi / (2.0 * RD_PI), theta / RD_PI);
             }
 
+            /// Corona spikes.
+            ///
+            /// A separable sine lattice rather than real noise, for two reasons: it is three sines
+            /// in a vertex shader, and a virus is more regular than noise anyway - the spikes of a
+            /// corona sit on something close to a lattice, which is exactly what makes the silhouette
+            /// read as biological rather than as a rock.
+            ///
+            /// Sharpening with pow is what turns a field of gentle bumps into separated tentacles:
+            /// the lattice is mostly near zero, and raising it to a power keeps only the peaks.
+            /// Length 0 returns nothing, which is how the room's own surface stays smooth while the
+            /// monitor ball grows them - one shader, two materials.
+            float3 Tentacles(float3 positionOS, float3 n)
+            {
+                if (_TentacleLength <= 0.0001) return float3(0, 0, 0);
+
+                float3 dir = normalize(positionOS);
+                float t = _Time.y * _TentacleSpeed;
+
+                float d = _TentacleDensity;
+
+                float f = sin(dir.x * d + t * 0.7)
+                        * sin(dir.y * d + t * 1.1)
+                        * sin(dir.z * d + t * 0.9);
+
+                float spike = pow(saturate(f), _TentacleSharpness);
+
+                // Sway happens across the normal, not along it. Lengthening and shortening alone
+                // reads as breathing; it only reads as a tentacle once the tip also moves
+                // sideways, and each one needs its own phase or the whole ball waves in unison.
+                float3 up = abs(n.y) > 0.99 ? float3(1, 0, 0) : float3(0, 1, 0);
+                float3 t1 = normalize(cross(n, up));
+                float3 t2 = cross(n, t1);
+
+                float phase = dot(dir, float3(17.1, 9.7, 23.3));
+
+                float3 sway = (t1 * sin(t * 1.3 + phase) + t2 * cos(t + phase)) * _TentacleSway;
+
+                return (n + sway) * spike * _TentacleLength;
+            }
+
             Varyings vert(Attributes v)
             {
                 Varyings o = (Varyings)0;
@@ -192,6 +245,8 @@ Shader "RDSystem/RDDisplayInkDeform"
                 depth = saturate(depth * _DepthGain);
 
                 float3 displaced = v.positionOS.xyz + normalize(v.normalOS) * depth * _DeformMetres;
+
+                displaced += Tentacles(v.positionOS.xyz, normalize(v.normalOS));
 
                 o.positionCS = TransformObjectToHClip(displaced);
 

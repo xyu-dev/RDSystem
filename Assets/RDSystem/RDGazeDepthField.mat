@@ -25,14 +25,14 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _DecayTau: 10
-    - _DeltaTime: 0.0393859
-    - _DiffusePerSecond: 3.5
+    - _DecayTau: 68.90331
+    - _DeltaTime: 0.045695204
+    - _DiffusePerSecond: 0.18177985
     - _GazeState: 0
     - _PaintPerSecond: 0.55
     - _PaintRadius: 0.26
     - _PaintSoftness: 0.22
     m_Colors:
-    - _GazeDir: {r: 0.25646135, g: -0.57580817, b: 0.77631986, a: 0}
+    - _GazeDir: {r: 0.9627362, g: 0.122410566, b: -0.24115281, a: 0}
   m_BuildTextureStacks: []
   m_AllowLocking: 1

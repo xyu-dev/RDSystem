@@ -104,14 +104,14 @@ Material:
     - _Dv: 0.4
     - _EnvironmentReflections: 1
     - _ExistingSeedThreshold: 0.03
-    - _Feed: 0.027649153
+    - _Feed: 0.034875263
     - _GazeFeedBoost: 0.01
     - _GazeKillBoost: -0.004
     - _GlossMapScale: 0
     - _Glossiness: 0
     - _GlossyReflections: 0
     - _InnerBandDensity: 36
-    - _Kill: 0.058279943
+    - _Kill: 0.06134373
     - _LaplacianShape: 1
     - _Metallic: 0
     - _OcclusionStrength: 1
@@ -140,8 +140,8 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _BaseColor: {r: 1, g: 1, b: 1, a: 1}
-    - _ClickDir: {r: 0.25646135, g: -0.57580817, b: 0.77631986, a: 0}
-    - _ClickPos: {r: 0.19921875, g: 0.6953125, b: 0, a: 0}
+    - _ClickDir: {r: 0.9627362, g: 0.12241057, b: -0.24115282, a: 0}
+    - _ClickPos: {r: 0.9609375, g: 0.4609375, b: 0, a: 0}
     - _Color: {r: 1, g: 1, b: 1, a: 1}
     - _EmissionColor: {r: 0, g: 0, b: 0, a: 1}
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
